@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache
+.ipynb_checkpoints/
+
+# datasets
+dataset
+# saved models
+save
+# tensorboard logs
+logs
+
+# synthetic datasets
+samples
