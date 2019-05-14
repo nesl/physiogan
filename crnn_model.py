@@ -55,7 +55,9 @@ class CRNNModel(tf.keras.Model):
     def __call__(self, x, y, hidden=None):
         batch_size, time_len, feat_size = x.shape
         if hidden is None:
-            hidden = [tf.zeros((batch_size, self.rnn_units)) for _ in range(3)]
+            #hidden = [tf.zeros((batch_size, self.rnn_units)) for _ in range(3)]
+            hidden = [tf.random_normal(
+                (batch_size, self.rnn_units)) for _ in range(3)]
         batch_size, time_len, feats = x.shape
         h1 = self.fc(x)
         h2 = self.emb(y)
@@ -71,7 +73,7 @@ class CRNNModel(tf.keras.Model):
         """ generates samples conditioned on the given label """
         num_examples = labels.shape[0]
         step_pred = tf.convert_to_tensor(
-            [[[0. for _ in range(6)]] for _ in range(num_examples)])
+            np.random.normal(scale=1.0, size=(num_examples, 1, 6)).astype(np.float32))
         preds = []
         last_state = None
         for _ in range(max_len):
