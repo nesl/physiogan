@@ -19,9 +19,10 @@ flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_string('model_name', 'har_lstm', 'Model name')
-flags.DEFINE_string('syn_train', None, 'Synthetic samples to train on')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
 flags.DEFINE_boolean('evaluate', False, 'Run evaluation only')
+flags.DEFINE_string('train_syn', None, 'Synthetic samples to train on')
+flags.DEFINE_string('evaluate_syn', None, 'Synthetic dataset to evaluate')
 
 
 class HARMLPModel(tf.keras.Model):
@@ -108,13 +109,13 @@ if __name__ == '__main__':
 
     FLAGS = flags.FLAGS
 
-    if FLAGS.syn_train is None:
+    if FLAGS.train_syn is None:
         # train on real data
         train_data = HARDataset(
             './dataset/har', is_train=True).to_dataset().batch(FLAGS.batch_size)
     else:
         # train on synthetic data
-        train_data = HARDataset(FLAGS.syn_train,
+        train_data = HARDataset(FLAGS.train_syn,
                                 is_syn=True).to_dataset().batch(FLAGS.batch_size)
     test_data = HARDataset(
         './dataset/har', is_train=False).to_dataset().batch(FLAGS.batch_size)
@@ -135,8 +136,12 @@ if __name__ == '__main__':
         # status.assert_consumed()
         print('Model restored from {}'.format(FLAGS.restore))
 
-    if FLAGS.evaluate:
+    if FLAGS.evaluate or FLAGS.evaluate_syn:
         assert FLAGS.restore is not None, "must provide checkpoint"
+        if FLAGS.evaluate_syn:
+            test_data = HARDataset(FLAGS.evaluate_syn,
+                                   is_syn=True).to_dataset().batch(FLAGS.batch_size)
+
         test_accuracy, conf_mat = evaluate(model, test_data)
         print('Test accuracy = {:.2f}'.format(test_accuracy))
         print('Confusion matrix = \n {}'.format(conf_mat))
