@@ -7,18 +7,21 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 
 from tensorflow.keras import layers
-from har_dataset import HARDataset
+
+from data_utils import DataFactory
 
 from tb_utils import plot_confusion_matrix, fig_to_image_tensor
 
 from sklearn.metrics import confusion_matrix
 tf.enable_eager_execution()
 
+
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
-flags.DEFINE_string('model_name', 'har_lstm', 'Model name')
+flags.DEFINE_string('model_name', 'lstm', 'Model name')
+flags.DEFINE_string('dataset', 'har', 'Dataset')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
 flags.DEFINE_boolean('evaluate', False, 'Run evaluation only')
 flags.DEFINE_string('train_syn', None, 'Synthetic samples to train on')
@@ -26,14 +29,16 @@ flags.DEFINE_string('evaluate_syn', None, 'Synthetic dataset to evaluate')
 
 
 class HARMLPModel(tf.keras.Model):
-    def __init__(self):
+    def __init__(self, num_feats, num_labels):
         super(HARMLPModel, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
         self.fc1 = layers.Dense(256, activation='relu')
         self.fc2 = layers.Dense(256, activation='relu')
-        self.fc3 = layers.Dense(6, activation=None)
+        self.fc3 = layers.Dense(num_labels, activation=None)
 
     def __call__(self, x):
-        out = tf.reshape(x, [-1, 128*6])
+        out = tf.reshape(x, [-1, 128*self.num_feats])
         out = self.fc1(out)
         out = self.fc2(out)
         out = self.fc3(out)
@@ -41,15 +46,18 @@ class HARMLPModel(tf.keras.Model):
 
 
 class HARLSTMModel(tf.keras.Model):
-    def __init__(self):
+    def __init__(self, num_feats, num_labels, num_units=64):
         super(HARLSTMModel, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.num_units = num_units
         self.lstm = layers.CuDNNGRU(
-            256, return_sequences=True, return_state=True)
+            self.num_units, return_sequences=True, return_state=True)
         self.lstm2 = layers.CuDNNGRU(
-            256, return_sequences=True, return_state=True)
+            self.num_units, return_sequences=True, return_state=True)
         self.lstm3 = layers.CuDNNGRU(
-            256, return_sequences=True, return_state=True)
-        self.fc = layers.Dense(6, activation=None)
+            self.num_units, return_sequences=True, return_state=True)
+        self.fc = layers.Dense(self.num_labels, activation=None)
 
     def __call__(self, x):
         out, last_h = self.lstm(x)
@@ -110,21 +118,23 @@ if __name__ == '__main__':
     FLAGS = flags.FLAGS
 
     if FLAGS.train_syn is None:
-        # train on real data
-        train_data = HARDataset(
-            './dataset/har', is_train=True).to_dataset().batch(FLAGS.batch_size)
+        train_data, test_data, metadata = DataFactory.create_dataset(
+            FLAGS.dataset)
+    # else:
+    #    # train on synthetic data
+    #    train_data = HARDataset(FLAGS.train_syn,
+    #                            is_syn=True).to_dataset().batch(FLAGS.batch_size)
     else:
-        # train on synthetic data
-        train_data = HARDataset(FLAGS.train_syn,
-                                is_syn=True).to_dataset().batch(FLAGS.batch_size)
-    test_data = HARDataset(
-        './dataset/har', is_train=False).to_dataset().batch(FLAGS.batch_size)
+        raise Exception("Not supported yet")
 
-    model = HARLSTMModel()
+    train_data = train_data.batch(FLAGS.batch_size)
+    test_data = test_data.batch(FLAGS.batch_size)
+
+    model = HARLSTMModel(metadata.num_feats, metadata.num_labels)
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
-    model_name = '{}/{}'.format(
-        FLAGS.model_name, datetime.datetime.now().strftime('%m_%d_%H_%M'))
+    model_name = '{}_{}/{}'.format(
+        FLAGS.dataset, FLAGS.model_name, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
     save_dir = './save/{}'.format(model_name)
     save_prefix = '{}/ckpt'.format(save_dir)
@@ -139,14 +149,15 @@ if __name__ == '__main__':
     if FLAGS.evaluate or FLAGS.evaluate_syn:
         assert FLAGS.restore is not None, "must provide checkpoint"
         if FLAGS.evaluate_syn:
-            test_data = HARDataset(FLAGS.evaluate_syn,
-                                   is_syn=True).to_dataset().batch(FLAGS.batch_size)
+            # test_data = HARDataset(FLAGS.evaluate_syn,
+            #                       is_syn=True).to_dataset().batch(FLAGS.batch_size)
+            raise Exception("Not supported yet")
 
         test_accuracy, conf_mat = evaluate(model, test_data)
         print('Test accuracy = {:.2f}'.format(test_accuracy))
         print('Confusion matrix = \n {}'.format(conf_mat))
         cm_fig = plot_confusion_matrix(
-            conf_mat, HARDataset.classes, normalize=True)
+            conf_mat, metadata.classes, normalize=True)
         plt.show()
         sys.exit(0)
 
@@ -164,7 +175,7 @@ if __name__ == '__main__':
             tf.contrib.summary.scalar(
                 'test accuracy', test_accuracy, step=epoch)
             cm_fig = plot_confusion_matrix(
-                conf_mat, HARDataset.classes, normalize=True)
+                conf_mat, metadata.classes, normalize=True)
             cm_tensor = fig_to_image_tensor(cm_fig)
             tf.contrib.summary.image('confusion matrix', cm_tensor, step=epoch)
             checkpoint = tf.train.Checkpoint(model=model)
