@@ -48,7 +48,7 @@ class DummyDataset:
             raise Exception("Unsupported waveform")
         signal = signal + np.random.normal(scale=0.10, size=signal.shape)
         signal = signal.reshape((-1, 1))
-        return signal
+        return signal.astype(np.float32)
 
     def __init__(self, dset_root=None, is_train=True):
         """
