@@ -11,6 +11,7 @@ class HARDataset:
                "SITTING", "STANDING", "LAYING"]
 
     num_labels = 6
+    num_feats = 6
 
     def __init__(self, path, is_train=True, is_syn=False):
         self.path = path
