@@ -9,6 +9,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 
 from data_utils import DataFactory
+from syn_dataset import SynDataset
 
 from tb_utils import plot_confusion_matrix, fig_to_image_tensor
 
@@ -116,25 +117,25 @@ def evaluate(model, dataset):
 if __name__ == '__main__':
 
     FLAGS = flags.FLAGS
-
-    if FLAGS.train_syn is None:
-        train_data, test_data, metadata = DataFactory.create_dataset(
-            FLAGS.dataset)
-    # else:
-    #    # train on synthetic data
-    #    train_data = HARDataset(FLAGS.train_syn,
-    #                            is_syn=True).to_dataset().batch(FLAGS.batch_size)
-    else:
-        raise Exception("Not supported yet")
-
+    model_tag = '{}_{}'.format(FLAGS.dataset, FLAGS.model_name)
+    train_data, test_data, metadata = DataFactory.create_dataset(
+        FLAGS.dataset)
+    if FLAGS.train_syn is not None:
+        # train on synthetic data
+        syn_train_dataset = SynDataset(
+            FLAGS.train_syn)
+        assert syn_train_dataset.num_feats == metadata.num_feats and syn_train_dataset.num_labels == metadata.num_labels, 'Datasets mismatch'
+        train_data = syn_train_dataset.to_dataset()
+        model_tag = '{}_{}'.format('syn', model_tag)
+        print('**** Will train on Synthetic data !! ')
     train_data = train_data.batch(FLAGS.batch_size)
     test_data = test_data.batch(FLAGS.batch_size)
 
     model = HARLSTMModel(metadata.num_feats, metadata.num_labels)
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
-    model_name = '{}_{}/{}'.format(
-        FLAGS.dataset, FLAGS.model_name, datetime.datetime.now().strftime('%m_%d_%H_%M'))
+    model_name = '{}/{}'.format(
+        model_tag, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
     save_dir = './save/{}'.format(model_name)
     save_prefix = '{}/ckpt'.format(save_dir)
@@ -149,10 +150,10 @@ if __name__ == '__main__':
     if FLAGS.evaluate or FLAGS.evaluate_syn:
         assert FLAGS.restore is not None, "must provide checkpoint"
         if FLAGS.evaluate_syn:
-            # test_data = HARDataset(FLAGS.evaluate_syn,
-            #                       is_syn=True).to_dataset().batch(FLAGS.batch_size)
-            raise Exception("Not supported yet")
-
+            test_data = SynDataset(
+                FLAGS.evaluate_syn)
+            assert metadata.num_feats == test_data.num_feats and metadata.num_labels == test_data.num_labels, 'Datasets mismatch'
+            test_data = test_data.to_dataset().batch(FLAGS.batch_size)
         test_accuracy, conf_mat = evaluate(model, test_data)
         print('Test accuracy = {:.2f}'.format(test_accuracy))
         print('Confusion matrix = \n {}'.format(conf_mat))
