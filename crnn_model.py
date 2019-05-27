@@ -11,7 +11,7 @@ import tensorflow as tf
 from tensorflow.keras import layers
 import datetime
 
-from har_dataset import HARDataset
+from data_utils import DataFactory
 import tb_utils
 
 tf.enable_eager_execution()
@@ -19,7 +19,8 @@ tf.enable_eager_execution()
 
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
-flags.DEFINE_integer('num_epochs', 10, 'Number of epochs')
+flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
+flags.DEFINE_string('dataset', 'har', "dataset")
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_string('model_name', 'har_crnn', 'Model name')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
@@ -38,26 +39,24 @@ def gen_plot(samples):
 
 class CRNNModel(tf.keras.Model):
 
-    def __init__(self, rnn_units=256):
+    def __init__(self, num_feats, num_labels, num_units=64):
         super(CRNNModel, self).__init__()
-        self.rnn_units = rnn_units
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.num_units = num_units
+        self.num_layers = 3
         self.fc = layers.Dense(32)
-        self.emb = layers.Embedding(6, 32)
+        self.emb = layers.Embedding(self.num_labels, 32)
         self.gru = layers.CuDNNGRU(
-            self.rnn_units, return_state=True, return_sequences=True)
+            self.num_units, return_state=True, return_sequences=True)
         self.gru2 = layers.CuDNNGRU(
-            self.rnn_units, return_state=True, return_sequences=True)
+            self.num_units, return_state=True, return_sequences=True)
         self.gru3 = layers.CuDNNGRU(
-            self.rnn_units, return_state=True, return_sequences=True)
+            self.num_units, return_state=True, return_sequences=True)
 
-        self.fc_last = layers.Dense(6)
+        self.fc_last = layers.Dense(self.num_feats)
 
-    def __call__(self, x, y, hidden=None):
-        batch_size, time_len, feat_size = x.shape
-        if hidden is None:
-            #hidden = [tf.zeros((batch_size, self.rnn_units)) for _ in range(3)]
-            hidden = [tf.random_normal(
-                (batch_size, self.rnn_units)) for _ in range(3)]
+    def __call__(self, x, y, hidden):
         batch_size, time_len, feats = x.shape
         h1 = self.fc(x)
         h2 = self.emb(y)
@@ -69,13 +68,14 @@ class CRNNModel(tf.keras.Model):
         preds = self.fc_last(outputs)
         return preds, [last_state1, last_state2, last_state3]
 
-    def sample(self, labels, max_len=128):
+    def sample(self, labels, z, max_len=128):
         """ generates samples conditioned on the given label """
         num_examples = labels.shape[0]
+        # TODO(malzantot): fix the init pred : probably add an START token
         step_pred = tf.convert_to_tensor(
-            np.random.normal(scale=1.0, size=(num_examples, 1, 6)).astype(np.float32))
+            np.random.normal(scale=1.0, size=(num_examples, 1, self.num_feats)).astype(np.float32))
         preds = []
-        last_state = None
+        last_state = z  # use z as last state
         for _ in range(max_len):
             step_pred, last_state = self(step_pred, labels, last_state)
             preds.append(step_pred)
@@ -86,26 +86,30 @@ class CRNNModel(tf.keras.Model):
 if __name__ == '__main__':
     FLAGS = flags.FLAGS
 
-    train_data = HARDataset(
-        './dataset/har', is_train=True).to_dataset().batch(FLAGS.batch_size)
-    test_data = HARDataset(
-        './dataset/har', is_train=False).to_dataset().batch(FLAGS.batch_size)
+    train_data, test_data, metadata = DataFactory.create_dataset(
+        FLAGS.dataset)
+    train_data = train_data.batch(FLAGS.batch_size)
+    test_data = test_data.batch(FLAGS.batch_size)
 
-    model = CRNNModel()
+    model = CRNNModel(num_feats=metadata.num_feats,
+                      num_labels=metadata.num_labels)
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
     model_name = '{}/{}'.format(
         FLAGS.model_name, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
     save_dir = './save/{}'.format(model_name)
-    file_writer = tf.contrib.summary.create_file_writer(log_dir)
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
     save_prefix = '{}/ckpt'.format(save_dir)
 
-    test_samples = model.sample(tf.range(6))
+    sampling_size = metadata.num_labels
+    fixed_z = [tf.random_normal(
+        (sampling_size, model.num_units)) for _ in range(model.num_layers)]
+    fixed_labels = tf.range(metadata.num_labels)
+    test_samples = model.sample(labels=fixed_labels, z=fixed_z)
     tf.contrib.summary.image('sample', gen_plot(test_samples), step=0)
     checkpoint = tf.train.Checkpoint(model=model)
     if FLAGS.restore is not None:
@@ -116,11 +120,14 @@ if __name__ == '__main__':
 
     if FLAGS.sample:
         assert FLAGS.restore is not None, 'Must provide checkpoint'
-        uniform_logits = tf.log([[10.0 for _ in range(6)]])
+        uniform_logits = tf.log([[10.0 for _ in range(metadata.num_labels)]])
+        sampling_size = 10000
         cond_labels = tf.cast(tf.random.categorical(
-            uniform_logits, 10000), tf.int32)
+            uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
-        samples = model.sample(cond_labels)
+        sampling_z = [tf.random_normal((sampling_size, model.num_units))
+                      for _ in range(model.num_layers)]
+        samples = model.sample(cond_labels, sampling_z)
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
         if not os.path.exists(samples_out_dir):
             os.makedirs(samples_out_dir)
@@ -129,22 +136,32 @@ if __name__ == '__main__':
         print('Saved {} samples to {}'.format(
             samples.shape[0], samples_out_dir))
         sys.exit(0)
+    file_writer = tf.contrib.summary.create_file_writer(log_dir)
 
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
         for epoch in range(1, FLAGS.num_epochs+1):
             epoch_loss = 0
+            epoch_size = 0
             for batch_x, batch_y in train_data:
+                batch_size = int(batch_x.shape[0])
                 train_x = batch_x[:, :-1, :]
                 train_y = batch_x[:, 1:, :]
+                epoch_size += batch_size
+                init_hidden = [tf.random_normal((batch_size, model.num_units))
+                               for _ in range(model.num_layers)]
                 with tf.GradientTape() as gt:
-                    batch_preds, _ = model(train_x, batch_y)
+                    batch_preds, _ = model(train_x, batch_y, init_hidden)
                     batch_loss = tf.reduce_sum(
-                        tf.square(batch_preds - train_y))
+                        tf.reduce_mean(
+                            tf.reduce_mean(
+                                tf.square(batch_preds - train_y), axis=2),
+                            axis=1), axis=0)
                 grads = gt.gradient(batch_loss, model.trainable_variables)
                 optim.apply_gradients(zip(grads, model.trainable_variables))
                 epoch_loss += batch_loss.numpy()
+            epoch_loss /= epoch_size
             print('{} - {}'.format(epoch, epoch_loss))
-            test_samples = model.sample(tf.range(6))
+            test_samples = model.sample(fixed_labels, fixed_z)
             tf.contrib.summary.image(
                 'sample', gen_plot(test_samples), step=epoch)
             tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
