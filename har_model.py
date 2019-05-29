@@ -127,14 +127,14 @@ if __name__ == '__main__':
             FLAGS.train_syn)
         assert syn_train_dataset.num_feats == metadata.num_feats and syn_train_dataset.num_labels == metadata.num_labels, 'Datasets mismatch'
         if FLAGS.augment:
-            syn_data = syn_train_dataset.to_dataset()
+            syn_data = syn_train_dataset.to_dataset().shuffle(10000).take(1000)
             # TODO(malzantot): make sure that size of datasets are reasonably equal
             train_data = train_data.concatenate(syn_data)
 
             model_tag = '{}_{}'.format('aug', model_tag)
             print('**** Will train on Augmented data !! ')
         else:
-            train_data = syn_train_dataset.to_dataset()
+            train_data = syn_train_dataset.to_dataset().shuffle(10000).take(1000)
             model_tag = '{}_{}'.format('syn', model_tag)
             print('**** Will train on Synthetic data !! ')
     train_data = train_data.batch(FLAGS.batch_size)
