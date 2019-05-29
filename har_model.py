@@ -27,6 +27,7 @@ flags.DEFINE_string('restore', None, 'checkpoint directory')
 flags.DEFINE_boolean('evaluate', False, 'Run evaluation only')
 flags.DEFINE_string('train_syn', None, 'Synthetic samples to train on')
 flags.DEFINE_string('evaluate_syn', None, 'Synthetic dataset to evaluate')
+flags.DEFINE_boolean('augment', False, 'Augment two datasets')
 
 
 class HARMLPModel(tf.keras.Model):
@@ -125,9 +126,17 @@ if __name__ == '__main__':
         syn_train_dataset = SynDataset(
             FLAGS.train_syn)
         assert syn_train_dataset.num_feats == metadata.num_feats and syn_train_dataset.num_labels == metadata.num_labels, 'Datasets mismatch'
-        train_data = syn_train_dataset.to_dataset()
-        model_tag = '{}_{}'.format('syn', model_tag)
-        print('**** Will train on Synthetic data !! ')
+        if FLAGS.augment:
+            syn_data = syn_train_dataset.to_dataset()
+            # TODO(malzantot): make sure that size of datasets are reasonably equal
+            train_data = train_data.concatenate(syn_data)
+
+            model_tag = '{}_{}'.format('aug', model_tag)
+            print('**** Will train on Augmented data !! ')
+        else:
+            train_data = syn_train_dataset.to_dataset()
+            model_tag = '{}_{}'.format('syn', model_tag)
+            print('**** Will train on Synthetic data !! ')
     train_data = train_data.batch(FLAGS.batch_size)
     test_data = test_data.batch(FLAGS.batch_size)
 
