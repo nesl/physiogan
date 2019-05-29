@@ -22,7 +22,7 @@ tf.enable_eager_execution()
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 10, 'Number of epochs')
-flags.DEFINE_float('learning_rate', 0.00001, 'learning rate')
+flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_integer('z_dim', 64, 'Latent space vector size')
 flags.DEFINE_string('model_name', 'rvae', 'Model name')
 flags.DEFINE_string('dataset', 'har', 'dataset')
@@ -117,10 +117,10 @@ class RVAEModel(tf.keras.Model):
         recon_output, _ = self.decoder(dec_input, dec_init_state, y)
         return recon_output, mu, log_var
 
-    def sample(self, labels, max_len=128):
+    def sample(self, labels, max_len=125):
         """ generates samples conditioned on the given label """
         num_examples = int(labels.shape[0])
-        z = tf.random_uniform(shape=(num_examples, self.decoder.rnn_units))
+        z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
         last_state = z
