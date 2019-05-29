@@ -13,6 +13,8 @@ Metadata = namedtuple(
 class DataFactory:
     @classmethod
     def create_dataset(cls, dset_name):
+        """ returns
+            tuple of (train_data, test_data, metadata) """
         if dset_name == 'har':
             dset_root = 'dataset/har'
             dset_class = HARDataset

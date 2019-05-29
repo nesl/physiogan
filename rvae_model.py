@@ -109,10 +109,11 @@ class RVAEModel(tf.keras.Model):
         dec_init_state = z  # initialize the decoder state with the z vector
         init_step = tf.zeros_like(x[:, 0:1, :])
         dec_input = tf.concat([init_step, x[:, :-1]], axis=1)
-        # z_with_time = tf.tile(tf.expand_dims(
-        #    self.fc_z(z), axis=1), [1, time_len, 1])
+        z_emb = self.fc_z(z)
+        z_with_time = tf.tile(tf.expand_dims(
+            z_emb, 1), [1, time_len, 1])
 
-        #dec_input = tf.concat([z_with_time, dec_input], axis=2)
+        dec_input = tf.concat([z_with_time, dec_input], axis=2)
         recon_output, _ = self.decoder(dec_input, dec_init_state, y)
         return recon_output, mu, log_var
 
@@ -123,12 +124,10 @@ class RVAEModel(tf.keras.Model):
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
         last_state = z
+        z_emb = self.fc_z(z)
+        z_with_time = tf.expand_dims(z_emb, axis=1)
         for _ in range(max_len):
-            # step_input = tf.concat([
-            #    tf.expand_dims(self.fc_z(z), axis=1),
-            #    step_pred
-            # ], axis=2)
-            step_input = last_pred
+            step_input = tf.concat([z_with_time, last_pred], axis=2)
             last_pred, last_state = self.decoder(
                 step_input, last_state, labels)
             preds.append(last_pred)
