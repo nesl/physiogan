@@ -190,10 +190,10 @@ if __name__ == '__main__':
             for batch_x, batch_y in train_data:
                 with tf.GradientTape() as gt:
                     batch_preds, mu, log_var = model(batch_x, batch_y)
-                    recon_loss = tf.reduce_sum(tf.reduce_sum(tf.reduce_sum(
+                    recon_loss = tf.reduce_sum(tf.reduce_mean(tf.reduce_mean(
                         tf.square(batch_preds - batch_x), axis=2), axis=1), axis=0)
-                    kl_loss = -0.5 * tf.reduce_sum(tf.reduce_sum(1 + log_var - mu**2 -
-                                                                 tf.exp(log_var), axis=1), axis=0)
+                    kl_loss = -0.5 * tf.reduce_sum(tf.reduce_mean(1 + log_var - mu**2 -
+                                                                  tf.exp(log_var), axis=1), axis=0)
                     total_loss = recon_loss + kl_loss
                 grads = gt.gradient(total_loss, model.trainable_variables)
                 clipped_grads, _ = tf.clip_by_global_norm(grads, 1.0)
