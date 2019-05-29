@@ -5,6 +5,7 @@ from collections import namedtuple
 from har_dataset import HARDataset
 from adl_dataset import ADLDataset
 from dummy_dataset import DummyDataset
+from cinc_dataset import CINCDataset
 
 Metadata = namedtuple(
     'Point', ['num_feats', 'num_labels', 'classes'], verbose=False)
@@ -21,6 +22,9 @@ class DataFactory:
         elif dset_name == 'adl':
             dset_root = 'dataset/adl'
             dset_class = ADLDataset
+        elif dset_name == 'cinc':
+            dset_root = 'dataset/cinc'
+            dset_class = CINCDataset
         elif dset_name == 'dummy':
             dset_root = None
             dset_class = DummyDataset
