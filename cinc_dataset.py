@@ -10,6 +10,7 @@ class CINCDataset:
     classes = ['N', 'O', 'A', '~']
     num_feats = 1
     num_labels = len(classes)
+    max_len = 679
 
     def __init__(self, dset_root, is_train=True):
         self.dset_root = dset_root
@@ -44,9 +45,10 @@ class CINCDataset:
             x[1][:-1]) for x in reference_lines}
         # print(reference_lines)
         self.labels = [reference_lines[f[:-4]] for f in data_files]
-        self.data = np.expand_dims(np.array(data_x), axis=2)
-        self.data = self.data/100
-        print(self.data.shape)
+        data_x = [x-np.mean(x) for x in data_x]
+        self.data = np.expand_dims(np.array(data_x), axis=2).astype(np.float32)
+        self.data = self.data/100        # for numerical stability of training
+        self.data = self.data[:, ::4, :]  # Subsample
 
     def to_dataset(self):
         """ returns a tensorflow dataset object """
