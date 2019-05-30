@@ -202,7 +202,9 @@ if __name__ == '__main__':
         for epoch in range(1, FLAGS.num_epochs+1):
             epoch_recon_loss = 0.0
             epoch_kl_loss = 0.0
+            epoch_size = 0
             for batch_x, batch_y in train_data:
+                batch_size = int(batch_x.shape[0])
                 with tf.GradientTape() as gt:
                     batch_preds, mu, log_var = model(batch_x, batch_y)
                     recon_loss = tf.reduce_sum(tf.reduce_mean(tf.reduce_mean(
@@ -215,6 +217,9 @@ if __name__ == '__main__':
                 optim.apply_gradients(zip(grads, model.trainable_variables))
                 epoch_recon_loss += recon_loss.numpy()
                 epoch_kl_loss += kl_loss.numpy()
+                epoch_size += batch_size
+            epoch_recon_loss /= epoch_size
+            epoch_kl_loss /= epoch_size
             print('{} - ({:.3f}, {:.3f})'.format(epoch,
                                                  epoch_recon_loss, epoch_kl_loss))
             test_samples = model.sample(
