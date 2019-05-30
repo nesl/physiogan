@@ -14,6 +14,7 @@ class ADLDataset:
                'Descend_stairs', 'Getup_bed', 'Pour_water', 'Sitdown_chair', 'Standup_chair', 'Walk']
     num_labels = len(classes)
     num_feats = 3
+    max_len = 125
 
     def __init__(self, ds_root, is_train=True):
         self.ds_root = ds_root
