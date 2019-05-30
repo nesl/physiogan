@@ -109,7 +109,8 @@ if __name__ == '__main__':
     fixed_z = [tf.random_normal(
         (sampling_size, model.num_units)) for _ in range(model.num_layers)]
     fixed_labels = tf.range(metadata.num_labels)
-    test_samples = model.sample(labels=fixed_labels, z=fixed_z)
+    test_samples = model.sample(
+        labels=fixed_labels, z=fixed_z, max_len=metadata.max_len)
     tf.contrib.summary.image('sample', gen_plot(test_samples), step=0)
     checkpoint = tf.train.Checkpoint(model=model)
     if FLAGS.restore is not None:
@@ -127,7 +128,8 @@ if __name__ == '__main__':
         cond_labels = tf.squeeze(cond_labels)
         sampling_z = [tf.random_normal((sampling_size, model.num_units))
                       for _ in range(model.num_layers)]
-        samples = model.sample(cond_labels, sampling_z)
+        samples = model.sample(cond_labels, sampling_z,
+                               max_len=metadata.max_len)
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
         if not os.path.exists(samples_out_dir):
             os.makedirs(samples_out_dir)
@@ -161,7 +163,8 @@ if __name__ == '__main__':
                 epoch_loss += batch_loss.numpy()
             epoch_loss /= epoch_size
             print('{} - {}'.format(epoch, epoch_loss))
-            test_samples = model.sample(fixed_labels, fixed_z)
+            test_samples = model.sample(
+                fixed_labels, fixed_z, max_len=metadata.max_len)
             tf.contrib.summary.image(
                 'sample', gen_plot(test_samples), step=epoch)
             tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
