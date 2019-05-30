@@ -185,7 +185,7 @@ if __name__ == '__main__':
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, 10000), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
-        samples = model.sample(cond_labels)
+        samples = model.sample(cond_labels, max_len=metadata.max_len)
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
         if not os.path.exists(samples_out_dir):
             os.makedirs(samples_out_dir)
@@ -195,7 +195,8 @@ if __name__ == '__main__':
             samples.shape[0], samples_out_dir))
         sys.exit(0)
     file_writer = tf.contrib.summary.create_file_writer(log_dir)
-    test_samples = model.sample(tf.range(metadata.num_labels))
+    test_samples = model.sample(
+        tf.range(metadata.num_labels),  max_len=metadata.max_len)
     tf.contrib.summary.image('sample', gen_plot(test_samples), step=0)
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
         for epoch in range(1, FLAGS.num_epochs+1):
@@ -216,7 +217,8 @@ if __name__ == '__main__':
                 epoch_kl_loss += kl_loss.numpy()
             print('{} - ({:.3f}, {:.3f})'.format(epoch,
                                                  epoch_recon_loss, epoch_kl_loss))
-            test_samples = model.sample(tf.range(metadata.num_labels))
+            test_samples = model.sample(
+                tf.range(metadata.num_labels), max_len=metadata.max_len)
             tf.contrib.summary.image(
                 'sample', gen_plot(test_samples), step=epoch)
             tf.contrib.summary.scalar(
