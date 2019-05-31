@@ -11,6 +11,7 @@ class DummyDataset:
 
     num_feats = 1
     num_labels = len(classes)
+    max_len = 128
 
     @classmethod
     def generate_sin1(cls, length):
