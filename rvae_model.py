@@ -149,6 +149,31 @@ class RVAEModel(tf.keras.Model):
         return output.numpy()
 
 
+def train_rvae(model, train_data, optim):
+    recon_metric = tf.keras.metrics.Mean()
+    kl_metric = tf.keras.metrics.Mean()
+    for batch_x, batch_y in train_data:
+        batch_size = int(batch_x.shape[0])
+        with tf.GradientTape() as gt:
+            batch_preds, mu, log_var = model(batch_x, batch_y)
+            recon_loss = tf.reduce_mean(tf.reduce_mean(tf.reduce_mean(
+                tf.square(batch_preds - batch_x), axis=2), axis=1), axis=0)
+            kl_loss = -0.5 * tf.reduce_mean(tf.reduce_mean(1 + log_var - mu**2 -
+                                                           tf.exp(log_var), axis=1), axis=0)
+            recon_metric.update_state(recon_loss)
+            kl_metric.update_state(kl_loss)
+            total_loss = recon_loss + kl_loss
+        grads = gt.gradient(total_loss, model.trainable_variables)
+        clipped_grads, _ = tf.clip_by_global_norm(grads, 1.0)
+        optim.apply_gradients(zip(grads, model.trainable_variables))
+
+    epoch_recon_metric = recon_metric.result()
+    epoch_kl_metric = kl_metric.result()
+    epoch_loss = epoch_recon_metric+epoch_kl_metric
+
+    return epoch_recon_metric, epoch_kl_metric, epoch_loss
+
+
 if __name__ == '__main__':
     FLAGS = flags.FLAGS
 
@@ -199,27 +224,10 @@ if __name__ == '__main__':
         tf.range(metadata.num_labels),  max_len=metadata.max_len)
     tf.contrib.summary.image('sample', gen_plot(test_samples), step=0)
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
+
         for epoch in range(1, FLAGS.num_epochs+1):
-            epoch_recon_loss = 0.0
-            epoch_kl_loss = 0.0
-            epoch_size = 0
-            for batch_x, batch_y in train_data:
-                batch_size = int(batch_x.shape[0])
-                with tf.GradientTape() as gt:
-                    batch_preds, mu, log_var = model(batch_x, batch_y)
-                    recon_loss = tf.reduce_sum(tf.reduce_mean(tf.reduce_mean(
-                        tf.square(batch_preds - batch_x), axis=2), axis=1), axis=0)
-                    kl_loss = -0.5 * tf.reduce_sum(tf.reduce_mean(1 + log_var - mu**2 -
-                                                                  tf.exp(log_var), axis=1), axis=0)
-                    total_loss = recon_loss + kl_loss
-                grads = gt.gradient(total_loss, model.trainable_variables)
-                clipped_grads, _ = tf.clip_by_global_norm(grads, 1.0)
-                optim.apply_gradients(zip(grads, model.trainable_variables))
-                epoch_recon_loss += recon_loss.numpy()
-                epoch_kl_loss += kl_loss.numpy()
-                epoch_size += batch_size
-            epoch_recon_loss /= epoch_size
-            epoch_kl_loss /= epoch_size
+            epoch_recon_loss, epoch_kl_loss, epoch_total_loss = train_rvae(
+                model, train_data, optim)
             print('{} - ({:.3f}, {:.3f})'.format(epoch,
                                                  epoch_recon_loss, epoch_kl_loss))
             test_samples = model.sample(
@@ -230,6 +238,6 @@ if __name__ == '__main__':
                 'recon loss', epoch_recon_loss, step=epoch)
             tf.contrib.summary.scalar('kl loss', epoch_kl_loss, step=epoch)
             tf.contrib.summary.scalar(
-                'training loss', epoch_kl_loss+epoch_recon_loss, step=epoch)
+                'training loss', epoch_total_loss, step=epoch)
             file_writer.flush()
             checkpoint.save(file_prefix=save_prefix)
