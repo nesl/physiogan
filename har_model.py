@@ -72,38 +72,37 @@ class HARLSTMModel(tf.keras.Model):
 def train_epoch(model, dataset):
     epoch_loss = 0.0
     num_examples = 0
-    num_correct = 0
+    accuracy_metric = tf.keras.metrics.Accuracy()
+    loss_metric = tf.keras.metrics.Mean()
     for batch_idx, (batch_x, batch_y) in enumerate(train_data):
         with tf.GradientTape() as gt:
             batch_size = int(batch_x.shape[0])
             model_logits = model(batch_x)
             model_pred = tf.cast(tf.arg_max(model_logits, 1), tf.int32)
             batch_loss = tf.losses.sparse_softmax_cross_entropy(
-                batch_y, model_logits, reduction=tf.losses.Reduction.SUM_BY_NONZERO_WEIGHTS)
-            num_correct += tf.reduce_sum(tf.cast(tf.equal(model_pred,
-                                                          batch_y), tf.float32)).numpy()
+                batch_y, model_logits, reduction=tf.losses.Reduction.SUM_OVER_BATCH_SIZE)
+            accuracy_metric.update_state(batch_y, model_pred)
+            loss_metric.update_state(batch_loss)
             num_examples += batch_size
 
         grads = gt.gradient(batch_loss, model.trainable_variables)
         optim.apply_gradients(zip(grads, model.trainable_variables))
-        epoch_loss += batch_loss
-    epoch_loss /= batch_idx
-    epoch_accuracy = (num_correct / num_examples)
+    epoch_loss = loss_metric.result()
+    epoch_accuracy = accuracy_metric.result()
 
     return epoch_loss, epoch_accuracy
 
 
 def evaluate(model, dataset):
     num_examples = 0
-    num_correct = 0
 
     all_true = []
     all_preds = []
+    accuracy_metric = tf.keras.metrics.Accuracy()
     for batch_x, batch_y in dataset:
         model_logits = model(batch_x)
         model_pred = tf.cast(tf.arg_max(model_logits, 1), tf.int32)
-        num_correct += tf.reduce_sum(
-            tf.cast(tf.equal(model_pred, batch_y), tf.float32))
+        accuracy_metric.update_state(batch_y, model_pred)
         num_examples += int(batch_x.shape[0])
         all_preds.append(model_pred.numpy())
         all_true.append(batch_y.numpy())
@@ -112,7 +111,7 @@ def evaluate(model, dataset):
     all_preds = np.concatenate(all_preds)
 
     conf_mat = confusion_matrix(all_true, all_preds)
-    return num_correct / num_examples, conf_mat
+    return accuracy_metric.result(), conf_mat
 
 
 if __name__ == '__main__':
