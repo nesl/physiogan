@@ -82,13 +82,13 @@ def pretrain_disc_epoch(model, disc_model, train_data, d_optim):
                           for _ in range(model.num_layers)]
             samples = model.sample(cond_labels, sampling_z,
                                    max_len=metadata.max_len)
-            d_out_real = disc_model(batch_x[:, ::4, :], batch_y)
-            d_out_fake = disc_model(samples[:, ::4, :], cond_labels)
+            d_out_real = disc_model(batch_x[:, ::, :], batch_y)
+            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
             d_out = tf.concat([d_out_real, d_out_fake], axis=0)
             d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
                                   tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
             # d_loss
-            d_loss = sparse_softmax_cross_entropy(d_target, d_out)
+            d_loss = sparse_softmax_cross_entropy(d_target, d_out) / batch_size
             d_pred = tf.argmax(d_out, axis=1)
 
         print('\t', d_loss.numpy())
@@ -130,7 +130,7 @@ def adv_train_epoch(model, disc_model, train_data, d_optim, g_optim):
             d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
                                   tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
             d_pred = tf.argmax(d_out, axis=1)
-            d_loss = sparse_softmax_cross_entropy(d_target, d_out)
+            d_loss = sparse_softmax_cross_entropy(d_target, d_out) / batch_size
             d_accuracy_metric.update_state(d_target, d_pred)
             cond_labels = tf.random.uniform(
                 minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
@@ -141,7 +141,7 @@ def adv_train_epoch(model, disc_model, train_data, d_optim, g_optim):
             d_out_fake = disc_model(samples[:, ::, :], cond_labels)
             # g_loss
             g_adv_loss = sparse_softmax_cross_entropy(
-                tf.ones(shape=(batch_size,), dtype=tf.int32), d_out_fake)
+                tf.ones(shape=(batch_size,), dtype=tf.int32), d_out_fake) / batch_size
             g_recon_loss = recon_loss
             g_loss = g_adv_loss + 10 * g_recon_loss
 
