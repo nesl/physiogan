@@ -14,13 +14,15 @@ import datetime
 from data_utils import DataFactory
 import tb_utils
 
+from models import CRNNModel
 tf.enable_eager_execution()
 
 
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
-flags.DEFINE_string('dataset', 'har', "dataset")
+flags.DEFINE_integer('num_units', 64, 'Number of RNN units')
+flags.DEFINE_string('dataset', 'dummy', "dataset")
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_string('model_name', 'har_crnn', 'Model name')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
@@ -37,52 +39,6 @@ def gen_plot(samples):
     return image
 
 
-class CRNNModel(tf.keras.Model):
-
-    def __init__(self, num_feats, num_labels, num_units=64):
-        super(CRNNModel, self).__init__()
-        self.num_feats = num_feats
-        self.num_labels = num_labels
-        self.num_units = num_units
-        self.num_layers = 3
-        self.fc = layers.Dense(32)
-        self.emb = layers.Embedding(self.num_labels, 32)
-        self.gru = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-        self.gru2 = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-        self.gru3 = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-
-        self.fc_last = layers.Dense(self.num_feats)
-
-    def __call__(self, x, y, hidden):
-        batch_size, time_len, feats = x.shape
-        h1 = self.fc(x)
-        h2 = self.emb(y)
-        h2 = tf.tile(tf.expand_dims(h2, 1), [1, time_len, 1])
-        h = tf.concat([h1, h2], axis=-1)
-        outputs, last_state1 = self.gru(h, hidden[0])
-        outputs, last_state2 = self.gru2(outputs, hidden[1])
-        outputs, last_state3 = self.gru3(outputs, hidden[2])
-        preds = self.fc_last(outputs)
-        return preds, [last_state1, last_state2, last_state3]
-
-    def sample(self, labels, z, max_len=128):
-        """ generates samples conditioned on the given label """
-        num_examples = labels.shape[0]
-        # TODO(malzantot): fix the init pred : probably add an START token
-        step_pred = tf.convert_to_tensor(
-            np.random.normal(scale=1.0, size=(num_examples, 1, self.num_feats)).astype(np.float32))
-        preds = []
-        last_state = z  # use z as last state
-        for _ in range(max_len):
-            step_pred, last_state = self(step_pred, labels, last_state)
-            preds.append(step_pred)
-        output = tf.concat(preds, axis=1)
-        return output.numpy()
-
-
 if __name__ == '__main__':
     FLAGS = flags.FLAGS
 
@@ -92,7 +48,8 @@ if __name__ == '__main__':
     test_data = test_data.batch(FLAGS.batch_size)
 
     model = CRNNModel(num_feats=metadata.num_feats,
-                      num_labels=metadata.num_labels)
+                      num_labels=metadata.num_labels,
+                      num_units=FLAGS.num_units)
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
     model_name = '{}/{}'.format(
