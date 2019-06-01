@@ -68,7 +68,7 @@ class CRNNModel(tf.keras.Model):
             step_pred, last_state = self(step_pred, labels, last_state)
             preds.append(step_pred)
         output = tf.concat(preds, axis=1)
-        return output.numpy()
+        return output
 
 
 class RNNEncoder(tf.keras.Model):

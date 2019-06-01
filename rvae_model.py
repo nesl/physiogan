@@ -117,7 +117,7 @@ if __name__ == '__main__':
     file_writer = tf.contrib.summary.create_file_writer(log_dir)
     test_samples = model.sample(
         tf.range(metadata.num_labels),  max_len=metadata.max_len)
-    tf.contrib.summary.image('sample', gen_plot(test_samples), step=0)
+    tf.contrib.summary.image('sample', gen_plot(test_samples.numpy()), step=0)
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
 
         for epoch in range(1, FLAGS.num_epochs+1):
@@ -128,7 +128,7 @@ if __name__ == '__main__':
             test_samples = model.sample(
                 tf.range(metadata.num_labels), max_len=metadata.max_len)
             tf.contrib.summary.image(
-                'sample', gen_plot(test_samples), step=epoch)
+                'sample', gen_plot(test_samples.numpy()), step=epoch)
             tf.contrib.summary.scalar(
                 'recon loss', epoch_recon_loss, step=epoch)
             tf.contrib.summary.scalar('kl loss', epoch_kl_loss, step=epoch)
