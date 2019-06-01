@@ -3,6 +3,53 @@ from tensorflow.keras import layers
 import numpy as np
 
 
+class ConvDiscriminator(tf.keras.Model):
+    def __init__(self, num_feats, num_labels):
+        super(ConvDiscriminator, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.emb_layer = layers.Embedding(self.num_labels, 32)
+        self.conv1 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.conv2 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.conv2 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.fc_out = layers.Dense(2)
+
+    def __call__(self, x, y):
+        batch_size, time_len, _ = x.shape
+        label_emb = self.emb_layer(y)
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv2(out)
+        out = tf.reshape(out, [batch_size, -1])
+        out = tf.concat([out, label_emb], axis=-1)
+        out = self.fc_out(out)
+        return out
+
+
+class RNNDiscriminator(tf.keras.Model):
+    def __init__(self, num_feats, num_labels, num_units=32):
+        super(RNNDiscriminator, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.num_units = num_units
+
+        self.emb_layer = layers.Embedding(self.num_labels, 32)
+        self.lstm = layers.CuDNNGRU(
+            self.num_units, return_sequences=True, return_state=True)
+        self.fc_out = layers.Dense(2)
+
+    def __call__(self, x, y):
+        label_emb = self.emb_layer(y)
+        out, last_h = self.lstm(x)
+        last_out = out[:, -1, :]
+        out = tf.concat([last_out, label_emb], axis=-1)
+        out = self.fc_out(out)
+        return out
+
+
 class HARLSTMModel(tf.keras.Model):
     def __init__(self, num_feats, num_labels, num_units=64):
         super(HARLSTMModel, self).__init__()
@@ -177,4 +224,4 @@ class RVAEModel(tf.keras.Model):
                 step_input, last_state, labels)
             preds.append(last_pred)
         output = tf.concat(preds, axis=1)
-        return output.numpy()
+        return output

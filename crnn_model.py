@@ -11,22 +11,29 @@ import tensorflow as tf
 from tensorflow.keras import layers
 import datetime
 
+from tensorflow.losses import sparse_softmax_cross_entropy
 from data_utils import DataFactory
 import tb_utils
 
-from models import CRNNModel, HARLSTMModel
+from models import CRNNModel, HARLSTMModel, RNNDiscriminator, ConvDiscriminator
+
+
 tf.enable_eager_execution()
 
 
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
+flags.DEFINE_integer(
+    "mle_epochs", 10, "Number of epochs to train using MLE only")
+flags.DEFINE_integer('disc_pre_train_epochs', 5,
+                     'Number of epochs to pre-train the discriminator')
 flags.DEFINE_integer('num_units', 64, 'Number of RNN units')
 flags.DEFINE_string('dataset', 'dummy', "dataset")
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
 flags.DEFINE_string('model_name', 'crnn', 'Model name')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
-flags.DEFINE_string('disc_restore', None,
+flags.DEFINE_string('aux_restore', None,
                     'checkpoint directory for discriminator')
 flags.DEFINE_boolean('sample', False, 'Generate Samples')
 
@@ -60,33 +67,93 @@ def train_epoch(model, train_data, optim):
     return loss_metric.result()
 
 
-def adv_train_epoch(model, disc_model, train_data, optim):
+def pretrain_disc_epoch(model, disc_model, train_data, d_optim):
     loss_metric = tf.keras.metrics.Mean()
+    d_accuracy_metric = tf.keras.metrics.Accuracy()
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
-        train_x = batch_x[:, :-1, :]
-        train_y = batch_x[:, 1:, :]
         init_hidden = [tf.random_normal((batch_size, model.num_units))
                        for _ in range(model.num_layers)]
-        with tf.GradientTape(persistent=True) as gt:
-            batch_preds, _ = model(train_x, batch_y, init_hidden)
+        with tf.GradientTape() as d_tape:
+            #batch_preds, _ = model(train_x, batch_y, init_hidden)
             cond_labels = tf.random.uniform(
                 minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
             sampling_z = [tf.random_normal((batch_size, model.num_units))
                           for _ in range(model.num_layers)]
             samples = model.sample(cond_labels, sampling_z,
                                    max_len=metadata.max_len)
-            disc_out = disc_model(samples)
+            d_out_real = disc_model(batch_x[:, ::4, :], batch_y)
+            d_out_fake = disc_model(samples[:, ::4, :], cond_labels)
+            d_out = tf.concat([d_out_real, d_out_fake], axis=0)
+            d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
+                                  tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
+            # d_loss
+            d_loss = sparse_softmax_cross_entropy(d_target, d_out)
+            d_pred = tf.argmax(d_out, axis=1)
+
+        print('\t', d_loss.numpy())
+
+        loss_metric.update_state(d_loss)
+        d_accuracy_metric.update_state(d_target, d_pred)
+        d_grads = d_tape.gradient(d_loss, disc_model.trainable_variables)
+        d_optim.apply_gradients(zip(d_grads, disc_model.trainable_variables))
+
+    return loss_metric.result(), d_accuracy_metric.result()
+
+
+def adv_train_epoch(model, disc_model, train_data, d_optim, g_optim):
+    loss_metric = tf.keras.metrics.Mean()
+    d_accuracy_metric = tf.keras.metrics.Accuracy()
+    for batch_x, batch_y in train_data:
+        batch_size = int(batch_x.shape[0])
+        batch_size = int(batch_x.shape[0])
+        train_x = batch_x[:, :-1, :]
+        train_y = batch_x[:, 1:, :]
+        init_hidden = [tf.random_normal((batch_size, model.num_units))
+                       for _ in range(model.num_layers)]
+        with tf.GradientTape() as d_tape, tf.GradientTape() as g_tape:
+            # Reconsturction error
+            batch_preds, _ = model(train_x, batch_y, init_hidden)
             recon_loss = tf.reduce_mean(tf.reduce_mean(tf.reduce_mean(tf.square(batch_preds - train_y), axis=2),
                                                        axis=1), axis=0)
-            disc_loss = tf.losses.sparse_softmax_cross_entropy(cond_labels, disc_out,
-                                                               reduction=tf.losses.Reduction.SUM_OVER_BATCH_SIZE)
-            total_loss = disc_loss  # + recon_loss
-        loss_metric.update_state(recon_loss)
-        grads = gt.gradient(total_loss, model.trainable_variables)
-        optim.apply_gradients(zip(grads, model.trainable_variables))
+            cond_labels = tf.random.uniform(
+                minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
+            sampling_z = [tf.random_normal((batch_size, model.num_units))
+                          for _ in range(model.num_layers)]
+            samples = model.sample(cond_labels, sampling_z,
+                                   max_len=metadata.max_len)
+            d_out_real = disc_model(batch_x[:, ::, :], batch_y)
+            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
 
-    return loss_metric.result()
+            # d_loss
+            d_out = tf.concat([d_out_real, d_out_fake], axis=0)
+            d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
+                                  tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
+            d_pred = tf.argmax(d_out, axis=1)
+            d_loss = sparse_softmax_cross_entropy(d_target, d_out)
+            d_accuracy_metric.update_state(d_target, d_pred)
+            cond_labels = tf.random.uniform(
+                minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
+            sampling_z = [tf.random_normal((batch_size, model.num_units))
+                          for _ in range(model.num_layers)]
+            samples = model.sample(cond_labels, sampling_z,
+                                   max_len=metadata.max_len)
+            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
+            # g_loss
+            g_adv_loss = sparse_softmax_cross_entropy(
+                tf.ones(shape=(batch_size,), dtype=tf.int32), d_out_fake)
+            g_recon_loss = recon_loss
+            g_loss = g_adv_loss + 10 * g_recon_loss
+
+        print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
+        loss_metric.update_state(g_loss)
+        d_grads = d_tape.gradient(d_loss, disc_model.trainable_variables)
+        d_optim.apply_gradients(zip(d_grads, disc_model.trainable_variables))
+
+        g_grads = g_tape.gradient(g_loss, model.trainable_variables)
+        g_optim.apply_gradients(zip(g_grads, model.trainable_variables))
+
+    return loss_metric.result(), d_accuracy_metric.result()
 
 
 def evaluate_samples(model, disc_model, metadata):
@@ -117,17 +184,20 @@ if __name__ == '__main__':
                       num_labels=metadata.num_labels,
                       num_units=FLAGS.num_units)
 
-    disc_model = HARLSTMModel(
+    aux_model = HARLSTMModel(
         num_feats=metadata.num_feats, num_labels=metadata.num_labels)
 
-    disc_checkpoint = tf.train.Checkpoint(model=disc_model)
-    if FLAGS.disc_restore is not None:
-        status = disc_checkpoint.restore(
-            tf.train.latest_checkpoint('./save/'+FLAGS.disc_restore))
-        print('Disc Model restored from {}'.format(FLAGS.disc_restore))
+    aux_checkpoint = tf.train.Checkpoint(model=aux_model)
+    if FLAGS.aux_restore is not None:
+        status = aux_checkpoint.restore(
+            tf.train.latest_checkpoint('./save/'+FLAGS.aux_restore))
+        print('Aux. classifier Model restored from {}'.format(FLAGS.aux_restore))
         # status.assert_consumed()
-    optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
+    d_model = ConvDiscriminator(
+        num_feats=metadata.num_feats, num_labels=metadata.num_labels)
+    optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
+    d_optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
     model_tag = '{}_{}'.format(FLAGS.dataset, FLAGS.model_name)
     model_name = '{}/{}'.format(
         model_tag, datetime.datetime.now().strftime('%m_%d_%H_%M'))
@@ -176,15 +246,28 @@ if __name__ == '__main__':
     file_writer = tf.contrib.summary.create_file_writer(log_dir)
 
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
+
         for epoch in range(1, FLAGS.num_epochs+1):
-            epoch_loss = train_epoch(model, train_data, optim)
+            if epoch <= FLAGS.mle_epochs:
+                epoch_loss = train_epoch(model, train_data, optim)
+                print('{} - {}'.format(epoch, epoch_loss))
+            else:
+                if epoch == (FLAGS.mle_epochs+1):
+                    print('*** Pre-Training Discriminator ***')
+                    for ii in range(FLAGS.disc_pre_train_epochs):
+                        _, disc_acc = pretrain_disc_epoch(
+                            model, d_model, train_data, d_optim)
+                        print('pre: {} - {}'.format(ii, disc_acc))
+                epoch_loss, epoch_acc = adv_train_epoch(
+                    model, d_model, train_data, d_optim, optim)
 
-            print('{} - {}'.format(epoch, epoch_loss))
+                print('{} - {}'.format(epoch, epoch_acc))
 
-            sampling_acc = evaluate_samples(model, disc_model, metadata)
+            sampling_acc = evaluate_samples(model, aux_model, metadata)
             print('** {} ** '.format(sampling_acc))
             test_samples = model.sample(
                 fixed_labels, fixed_z, max_len=metadata.max_len)
+            tf.contrib.summary.scalar('sampling acc', sampling_acc, step=epoch)
             tf.contrib.summary.image(
                 'sample', gen_plot(test_samples.numpy()), step=epoch)
             tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
