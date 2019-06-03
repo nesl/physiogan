@@ -13,18 +13,16 @@ class ConvDiscriminator(tf.keras.Model):
             3), strides=(3), padding='same', activation='relu')
         self.conv2 = layers.Conv1D(32, kernel_size=(
             3), strides=(3), padding='same', activation='relu')
-        self.conv2 = layers.Conv1D(32, kernel_size=(
+        self.conv3 = layers.Conv1D(32, kernel_size=(
             3), strides=(3), padding='same', activation='relu')
-        self.fc_out = layers.Dense(2)
+        self.fc_out = layers.Dense(self.num_labels+1)
 
-    def __call__(self, x, y):
+    def __call__(self, x):
         batch_size, time_len, _ = x.shape
-        label_emb = self.emb_layer(y)
         out = self.conv1(x)
         out = self.conv2(out)
-        out = self.conv2(out)
+        out = self.conv3(out)
         out = tf.reshape(out, [batch_size, -1])
-        out = tf.concat([out, label_emb], axis=-1)
         out = self.fc_out(out)
         return out
 

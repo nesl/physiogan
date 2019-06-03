@@ -72,23 +72,25 @@ def pretrain_disc_epoch(model, disc_model, train_data, d_optim):
     d_accuracy_metric = tf.keras.metrics.Accuracy()
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
-        init_hidden = [tf.random_normal((batch_size, model.num_units))
-                       for _ in range(model.num_layers)]
+
         with tf.GradientTape() as d_tape:
             #batch_preds, _ = model(train_x, batch_y, init_hidden)
+
+            sampling_size = max(1, batch_size // (disc_model.num_labels))
             cond_labels = tf.random.uniform(
-                minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
-            sampling_z = [tf.random_normal((batch_size, model.num_units))
+                minval=0, maxval=metadata.num_labels, shape=(sampling_size,), dtype=tf.int32)
+            sampling_z = [tf.random_normal((sampling_size, model.num_units))
                           for _ in range(model.num_layers)]
             samples = model.sample(cond_labels, sampling_z,
                                    max_len=metadata.max_len)
-            d_out_real = disc_model(batch_x[:, ::, :], batch_y)
-            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
+            d_out_real = disc_model(batch_x[:, ::, :])
+            d_out_fake = disc_model(samples[:, ::, :])
             d_out = tf.concat([d_out_real, d_out_fake], axis=0)
-            d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
-                                  tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
+            d_target = tf.concat([batch_y,
+                                  disc_model.num_labels*tf.ones(shape=(sampling_size,), dtype=tf.int32)], axis=0)
             # d_loss
-            d_loss = sparse_softmax_cross_entropy(d_target, d_out) / batch_size
+            d_loss = sparse_softmax_cross_entropy(
+                d_target, d_out) / int(d_target.shape[0])
             d_pred = tf.argmax(d_out, axis=1)
 
         print('\t', d_loss.numpy())
@@ -114,36 +116,42 @@ def adv_train_epoch(model, disc_model, train_data, d_optim, g_optim):
         with tf.GradientTape() as d_tape, tf.GradientTape() as g_tape:
             # Reconsturction error
             batch_preds, _ = model(train_x, batch_y, init_hidden)
-            recon_loss = tf.reduce_mean(tf.reduce_mean(tf.reduce_mean(tf.square(batch_preds - train_y), axis=2),
-                                                       axis=1), axis=0)
+            recon_loss = tf.reduce_mean(tf.reduce_mean(tf.reduce_mean(
+                tf.square(batch_preds - train_y), axis=2), axis=1), axis=0)
+            # Train discriminator
+            sampling_size = max(1, batch_size//disc_model.num_labels)
             cond_labels = tf.random.uniform(
-                minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
-            sampling_z = [tf.random_normal((batch_size, model.num_units))
+                minval=0, maxval=metadata.num_labels, shape=(sampling_size,), dtype=tf.int32)
+            sampling_z = [tf.random_normal((sampling_size, model.num_units))
                           for _ in range(model.num_layers)]
             samples = model.sample(cond_labels, sampling_z,
                                    max_len=metadata.max_len)
-            d_out_real = disc_model(batch_x[:, ::, :], batch_y)
-            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
+            d_out_real = disc_model(batch_x[:, ::, :])
+            d_out_fake = disc_model(samples[:, ::, :])
 
             # d_loss
             d_out = tf.concat([d_out_real, d_out_fake], axis=0)
-            d_target = tf.concat([tf.ones(shape=(batch_size,), dtype=tf.int32),
-                                  tf.zeros(shape=(batch_size,), dtype=tf.int32)], axis=0)
+            d_target = tf.concat([batch_y,
+                                  disc_model.num_labels*tf.ones(shape=(sampling_size,), dtype=tf.int32)], axis=0)
             d_pred = tf.argmax(d_out, axis=1)
-            d_loss = sparse_softmax_cross_entropy(d_target, d_out) / batch_size
+            d_loss = sparse_softmax_cross_entropy(
+                d_target, d_out) / int(d_target.shape[0])
+
             d_accuracy_metric.update_state(d_target, d_pred)
+
+            # Train generator
             cond_labels = tf.random.uniform(
                 minval=0, maxval=metadata.num_labels, shape=(batch_size,), dtype=tf.int32)
             sampling_z = [tf.random_normal((batch_size, model.num_units))
                           for _ in range(model.num_layers)]
             samples = model.sample(cond_labels, sampling_z,
                                    max_len=metadata.max_len)
-            d_out_fake = disc_model(samples[:, ::, :], cond_labels)
+            d_out_fake = disc_model(samples[:, ::, :])
             # g_loss
             g_adv_loss = sparse_softmax_cross_entropy(
-                tf.ones(shape=(batch_size,), dtype=tf.int32), d_out_fake) / batch_size
+                cond_labels, d_out_fake) / batch_size
             g_recon_loss = recon_loss
-            g_loss = g_adv_loss + 10 * g_recon_loss
+            g_loss = g_adv_loss + 100 * g_recon_loss
 
         print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
         loss_metric.update_state(g_loss)
@@ -151,12 +159,14 @@ def adv_train_epoch(model, disc_model, train_data, d_optim, g_optim):
         d_optim.apply_gradients(zip(d_grads, disc_model.trainable_variables))
 
         g_grads = g_tape.gradient(g_loss, model.trainable_variables)
-        g_optim.apply_gradients(zip(g_grads, model.trainable_variables))
+        g_clipped_grads, _ = tf.clip_by_global_norm(g_grads, 1.0)
+        g_optim.apply_gradients(
+            zip(g_clipped_grads, model.trainable_variables))
 
     return loss_metric.result(), d_accuracy_metric.result()
 
 
-def evaluate_samples(model, disc_model, metadata):
+def evaluate_samples(model, eval_model, metadata):
     accuracy_metric = tf.keras.metrics.Accuracy()
     for _ in range(10):
         sampling_size = 64
@@ -167,7 +177,7 @@ def evaluate_samples(model, disc_model, metadata):
                       for _ in range(model.num_layers)]
         samples = model.sample(cond_labels, sampling_z,
                                max_len=metadata.max_len)
-        model_preds = tf.argmax(disc_model(samples), axis=1)
+        model_preds = tf.argmax(eval_model(samples), axis=1)
         accuracy_metric.update_state(cond_labels, model_preds)
     return accuracy_metric.result()
 
