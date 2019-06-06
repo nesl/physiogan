@@ -43,6 +43,7 @@ class ADLDataset:
         else:
             _, self.data, _, self.labels = train_test_split(
                 all_data, all_labels, test_size=0.25)
+        print(np.unique(self.labels, return_counts=True))
 
     def to_dataset(self):
         """ returns a tensorflow dataset object """
@@ -52,7 +53,7 @@ class ADLDataset:
 
 
 if __name__ == '__main__':
-    adl_dataset = ADLDataset('dataset/adl', is_train=False)
+    adl_dataset = ADLDataset('dataset/adl', is_train=True)
     print(adl_dataset.class2idx)
     print(adl_dataset.data.shape)
     print(adl_dataset.labels.shape)
