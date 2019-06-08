@@ -10,7 +10,7 @@ class CINCDataset:
     classes = ['N', 'O', 'A', '~']
     num_feats = 1
     num_labels = len(classes)
-    max_len = 679
+    max_len = 272
 
     def __init__(self, dset_root, is_train=True):
         self.dset_root = dset_root
@@ -48,7 +48,8 @@ class CINCDataset:
         data_x = [x-np.mean(x) for x in data_x]
         self.data = np.expand_dims(np.array(data_x), axis=2).astype(np.float32)
         self.data = self.data/100        # for numerical stability of training
-        self.data = self.data[:, ::4, :]  # Subsample
+        self.data = self.data[:, ::10, :]  # Subsample
+        print(np.unique(self.labels, return_counts=True))
 
     def to_dataset(self):
         """ returns a tensorflow dataset object """
@@ -68,4 +69,4 @@ if __name__ == '__main__':
     for i in range(5):
         axes[i].plot(batch_x[i].numpy())
         axes[i].set_title('Label = {}'.format(batch_y[i].numpy()))
-    plt.show()
+    #plt.show()
