@@ -37,20 +37,22 @@ class RNNDiscriminator(tf.keras.Model):
         self.emb_layer = layers.Embedding(self.num_labels, 32)
         self.lstm = layers.CuDNNGRU(
             self.num_units, return_sequences=True, return_state=True)
-        self.fc_out = layers.Dense(2)
+        self.fc_out = layers.Dense(self.num_labels+1)
 
-    def __call__(self, x, y):
-        label_emb = self.emb_layer(y)
+    def __call__(self, x):
         out, last_h = self.lstm(x)
         last_out = out[:, -1, :]
-        out = tf.concat([last_out, label_emb], axis=-1)
-        out = self.fc_out(out)
+        out = self.fc_out(last_out)
         return out
 
 
-class HARLSTMModel(tf.keras.Model):
+class ClassModel(tf.keras.Model):
+    """
+    Classificatin model to classify input samples.
+    """
+
     def __init__(self, num_feats, num_labels, num_units=64):
-        super(HARLSTMModel, self).__init__()
+        super(ClassModel, self).__init__()
         self.num_feats = num_feats
         self.num_labels = num_labels
         self.num_units = num_units
@@ -70,12 +72,14 @@ class HARLSTMModel(tf.keras.Model):
         return out
 
 
-class CRNNModel(tf.keras.Model):
+class CGARNNModel(tf.keras.Model):
+    """ Conditional- Generative Adeversarial RNN  model """
 
-    def __init__(self, num_feats, num_labels, num_units=64):
-        super(CRNNModel, self).__init__()
+    def __init__(self, num_feats, num_labels, z_dim=32, num_units=64):
+        super(CGARNNModel, self).__init__()
         self.num_feats = num_feats
         self.num_labels = num_labels
+        self.z_dim = z_dim
         self.num_units = num_units
         self.num_layers = 3
         self.fc = layers.Dense(32)
@@ -88,6 +92,9 @@ class CRNNModel(tf.keras.Model):
             self.num_units, return_state=True, return_sequences=True)
 
         self.fc_last = layers.Dense(self.num_feats)
+        self.fc_z2h = layers.Dense(self.num_layers*self.num_units)
+
+        self.start_token = tf.zeros(shape=(1, 1, self.num_feats))
 
     def __call__(self, x, y, hidden):
         batch_size, time_len, feats = x.shape
@@ -99,16 +106,22 @@ class CRNNModel(tf.keras.Model):
         outputs, last_state2 = self.gru2(outputs, hidden[1])
         outputs, last_state3 = self.gru3(outputs, hidden[2])
         preds = self.fc_last(outputs)
-        return preds, [last_state1, last_state2, last_state3]
+        new_hidden = tf.stack([last_state1, last_state2, last_state3])
+        return preds, new_hidden
+
+    def noise2hidden(self, z):
+        batch_size = z.shape[0]
+        out = self.fc_z2h(z)
+        out = tf.reshape(out, shape=(self.num_layers, batch_size, -1))
+        return out
 
     def sample(self, labels, z, max_len=128):
         """ generates samples conditioned on the given label """
         num_examples = labels.shape[0]
         # TODO(malzantot): fix the init pred : probably add an START token
-        step_pred = tf.convert_to_tensor(
-            np.random.normal(scale=1.0, size=(num_examples, 1, self.num_feats)).astype(np.float32))
+        step_pred = tf.tile(self.start_token, [num_examples, 1, 1])
         preds = []
-        last_state = z  # use z as last state
+        last_state = self.noise2hidden(z)  # use z as last state
         for _ in range(max_len):
             step_pred, last_state = self(step_pred, labels, last_state)
             preds.append(step_pred)
@@ -171,6 +184,10 @@ class RNNDecoder(tf.keras.Model):
         new_hidden = [last_state1, last_state2, last_state3]
         return output, new_hidden
 
+    def init_hidden(self, batch_size):
+        h = tf.random_normal(shape=(batch_size, self.rnn_units))
+        return h
+
 
 class RVAEModel(tf.keras.Model):
 
@@ -204,10 +221,14 @@ class RVAEModel(tf.keras.Model):
         recon_output, _ = self.decoder(dec_input, dec_init_state, y)
         return recon_output, mu, log_var
 
-    def sample(self, labels, max_len=125):
+    def init_hidden(self, batch_size):
+        return tf.random_normal(shape=(batch_size, self.dec_rnn_units))
+
+    def sample(self, labels, z=None, max_len=125):
         """ generates samples conditioned on the given label """
         num_examples = int(labels.shape[0])
-        z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
+        if z is None:
+            z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
         last_state = tf.reshape(self.fc_hidden(z), [3, num_examples, -1])
