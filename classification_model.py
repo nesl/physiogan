@@ -1,4 +1,4 @@
-from models import HARLSTMModel
+from models import ClassModel
 import os
 import sys
 import datetime
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     train_data = train_data.batch(FLAGS.batch_size)
     test_data = test_data.batch(FLAGS.batch_size)
 
-    model = HARLSTMModel(metadata.num_feats, metadata.num_labels)
+    model = ClassModel(metadata.num_feats, metadata.num_labels)
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
     model_name = '{}/{}'.format(
