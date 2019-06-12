@@ -199,7 +199,7 @@ class RVAEModel(tf.keras.Model):
         self.num_feats = num_feats
         self.num_labels = num_labels
         self.z_input = z_input
-        self.encoder = RNNEncoder(enc_rnn_units)
+        self.encoder = RNNEncoder(enc_rnn_units, z_dim=z_dim)
         self.decoder = RNNDecoder(dec_rnn_units, num_feats, num_labels)
         self.fc_z = layers.Dense(6)
         self.fc_hidden = layers.Dense(3*self.dec_rnn_units)
@@ -210,7 +210,8 @@ class RVAEModel(tf.keras.Model):
 
         decoder_outputs = []
         # initialize the decoder state with the z vector
-        dec_init_state = tf.reshape(self.fc_hidden(z), [3, batch_size, -1])
+        dec_init_state = tf.reshape(self.noise2hidden(z), [3, batch_size, -1])
+
         init_step = tf.zeros_like(x[:, 0:1, :])
         dec_input = tf.concat([init_step, x[:, :-1]], axis=1)
         if self.z_input:
@@ -220,6 +221,9 @@ class RVAEModel(tf.keras.Model):
             dec_input = tf.concat([z_with_time, dec_input], axis=2)
         recon_output, _ = self.decoder(dec_input, dec_init_state, y)
         return recon_output, mu, log_var
+
+    def noise2hidden(self, z):
+        return self.fc_hidden(z)
 
     def init_hidden(self, batch_size):
         return tf.random_normal(shape=(batch_size, self.dec_rnn_units))
@@ -231,7 +235,7 @@ class RVAEModel(tf.keras.Model):
             z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
-        last_state = tf.reshape(self.fc_hidden(z), [3, num_examples, -1])
+        last_state = tf.reshape(self.noise2hidden(z), [3, num_examples, -1])
         z_emb = self.fc_z(z)
         z_with_time = tf.expand_dims(z_emb, axis=1)
         for _ in range(max_len):
