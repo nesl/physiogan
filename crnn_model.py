@@ -5,6 +5,8 @@ Conditional genration using RNN
 import sys
 import os
 import io
+import matplotlib as mpl
+mpl.use('agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
@@ -14,8 +16,7 @@ from data_utils import DataFactory
 import tb_utils
 from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
 from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
-import matplotlib as mpl
-mpl.use('agg')
+
 
 
 tf.enable_eager_execution()
@@ -100,7 +101,7 @@ if __name__ == '__main__':
         ckpt_name = tf.train.latest_checkpoint('./save/'+FLAGS.restore)
         print(ckpt_name)
         status = checkpoint.restore(ckpt_name)
-        status.assert_consumed()
+        # status.assert_consumed()
         print('Model restored from {}'.format(ckpt_name))
 
     if FLAGS.sample:
@@ -110,7 +111,7 @@ if __name__ == '__main__':
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
-        sampling_z = g_model.init_hidden(sampling_size)
+        sampling_z =tf.random_normal(shape=(sampling_size, g_model.z_dim))
         samples = g_model.sample(cond_labels, sampling_z,
                                  max_len=metadata.max_len)
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)

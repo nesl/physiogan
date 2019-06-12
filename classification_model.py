@@ -4,6 +4,8 @@ import sys
 import datetime
 import numpy as np
 
+import matplotlib as mpl
+mpl.use('agg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 
