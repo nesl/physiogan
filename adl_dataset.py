@@ -1,5 +1,5 @@
 """
-Author: Moustafa Alzantot (malzantot@ucla.edu)a
+Author: Moustafa Alzantot (malzantot@ucla.edu)
 """
 
 
@@ -16,7 +16,10 @@ class ADLDataset:
     num_feats = 3
     max_len = 125
 
-    def __init__(self, ds_root, is_train=True):
+    def __init__(self, ds_root, is_train=True, mini=False):
+        if mini:
+            self.classes = ['Climb_stairs', 'Comb_hair', 'Descend_stairs']
+            self.num_labels = len(self.classes)
         self.ds_root = ds_root
         self.is_train = is_train
         self.class2idx = {c: i for i, c in enumerate(self.classes)}
@@ -32,9 +35,9 @@ class ADLDataset:
             data.extend(c_data)
             labels.extend([c_id]*len(c_data))
 
-        min_len = min([x.shape[0] for x in data])
+        #min_len = min([x.shape[0] for x in data])
         # clip
-        data = [x[:min_len, :] for x in data]
+        data = [x[:self.max_len, :] for x in data]
         all_data = (np.array(data)/100)-0.5
         all_labels = np.array(labels).astype(np.int32)
 
@@ -54,7 +57,7 @@ class ADLDataset:
 
 
 if __name__ == '__main__':
-    adl_dataset = ADLDataset('dataset/adl', is_train=True)
+    adl_dataset = ADLDataset('dataset/adl', is_train=True, mini=True)
     print(adl_dataset.class2idx)
     print(adl_dataset.data.shape)
     print(adl_dataset.labels.shape)
