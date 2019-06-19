@@ -37,12 +37,13 @@ class ADLDataset:
         data = [x[:min_len, :] for x in data]
         all_data = (np.array(data)/100)-0.5
         all_labels = np.array(labels).astype(np.int32)
+
+        train_data, test_data, train_labels, test_labels = train_test_split(
+            all_data, all_labels, test_size=0.25, random_state=1000)
         if self.is_train:
-            self.data, _, self.labels, _ = train_test_split(
-                all_data, all_labels, test_size=0.25)
+            self.data, self.labels = train_data, train_labels
         else:
-            _, self.data, _, self.labels = train_test_split(
-                all_data, all_labels, test_size=0.25)
+            self.data, self.labels = test_data, test_labels
         print(np.unique(self.labels, return_counts=True))
 
     def to_dataset(self):
