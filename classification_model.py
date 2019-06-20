@@ -1,3 +1,10 @@
+from sklearn.metrics import confusion_matrix
+from tb_utils import plot_confusion_matrix, fig_to_image_tensor
+from syn_dataset import SynDataset
+from data_utils import DataFactory
+from tensorflow.keras import layers
+import tensorflow as tf
+import matplotlib.pyplot as plt
 from models import ClassModel
 import os
 import sys
@@ -6,17 +13,6 @@ import numpy as np
 
 import matplotlib as mpl
 mpl.use('agg')
-import matplotlib.pyplot as plt
-import tensorflow as tf
-
-from tensorflow.keras import layers
-
-from data_utils import DataFactory
-from syn_dataset import SynDataset
-
-from tb_utils import plot_confusion_matrix, fig_to_image_tensor
-
-from sklearn.metrics import confusion_matrix
 
 
 tf.enable_eager_execution()
@@ -74,7 +70,6 @@ def evaluate(model, dataset):
 
     all_true = np.concatenate(all_true)
     all_preds = np.concatenate(all_preds)
-
     conf_mat = confusion_matrix(all_true, all_preds)
     return accuracy_metric.result(), conf_mat
 

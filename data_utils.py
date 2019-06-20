@@ -31,8 +31,8 @@ class DataFactory:
         else:
             raise Exception("Invalid dataset requested")
 
-        train_data = dset_class(dset_root, is_train=True)
-        test_data = dset_class(dset_root, is_train=False)
+        train_data = dset_class(dset_root, is_train=True, mini=True)
+        test_data = dset_class(dset_root, is_train=False, mini=True)
 
         dset_meta = Metadata(train_data.num_feats,
                              train_data.num_labels, train_data.classes, train_data.max_len)

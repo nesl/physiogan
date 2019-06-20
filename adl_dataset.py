@@ -20,6 +20,7 @@ class ADLDataset:
         if mini:
             self.classes = ['Climb_stairs', 'Comb_hair', 'Descend_stairs']
             self.num_labels = len(self.classes)
+            self.max_len = 64
         self.ds_root = ds_root
         self.is_train = is_train
         self.class2idx = {c: i for i, c in enumerate(self.classes)}
@@ -35,8 +36,12 @@ class ADLDataset:
             data.extend(c_data)
             labels.extend([c_id]*len(c_data))
 
-        #min_len = min([x.shape[0] for x in data])
+        # min_len = min([x.shape[0] for x in data])
         # clip
+        if mini:
+            self.max_len = 64
+            # TODO(malzantot): try smoothing istead of subsampling.
+            data = [x[::2, :] for x in data]
         data = [x[:self.max_len, :] for x in data]
         all_data = (np.array(data)/100)-0.5
         all_labels = np.array(labels).astype(np.int32)
