@@ -2,21 +2,20 @@
 Conditional genration using RNN
 """
 
+from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
+from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
+import tb_utils
+from data_utils import DataFactory
+import datetime
+from tensorflow.keras import layers
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
 import sys
 import os
 import io
 import matplotlib as mpl
 mpl.use('agg')
-import matplotlib.pyplot as plt
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras import layers
-import datetime
-from data_utils import DataFactory
-import tb_utils
-from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
-from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
-
 
 
 tf.enable_eager_execution()
@@ -111,12 +110,11 @@ if __name__ == '__main__':
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
-        sampling_z =tf.random_normal(shape=(sampling_size, g_model.z_dim))
+        sampling_z = tf.random_normal(shape=(sampling_size, g_model.z_dim))
         samples = g_model.sample(cond_labels, sampling_z,
                                  max_len=metadata.max_len)
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
         if not os.path.exists(samples_out_dir):
-            0
             os.makedirs(samples_out_dir)
         np.save('{}/samples_x.npy'.format(samples_out_dir), samples)
         np.save('{}/samples_y.npy'.format(samples_out_dir), cond_labels.numpy())
@@ -129,7 +127,8 @@ if __name__ == '__main__':
 
         for epoch in range(1, FLAGS.num_epochs+1):
             if epoch <= FLAGS.mle_epochs:
-                epoch_loss = train_mse_epoch(g_model, train_data, g_optim)
+                epoch_loss, kl_loss = train_mse_epoch(
+                    g_model, train_data, g_optim)
                 print('{} - {}'.format(epoch, epoch_loss))
             else:
                 if epoch == (FLAGS.mle_epochs+1):
@@ -138,11 +137,12 @@ if __name__ == '__main__':
                         _, d_acc = adv_train_d_epoch(
                             g_model, d_model, train_data, d_optim, metadata.max_len)
                         print('pre: {} - {}'.format(ii, d_acc))
-                epoch_loss, epoch_acc = train_adv_epoch(
+                epoch_loss, epoch_acc, kl_loss = train_adv_epoch(
                     g_model, d_model, train_data, g_optim, d_optim, metadata.max_len)
 
                 print('{} - {}'.format(epoch, epoch_acc))
-
+            tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
+            tf.contrib.summary.scalar('KLD', kl_loss, step=epoch)
             if epoch % 10 == 0:
                 sampling_acc = evaluate_samples(
                     g_model, aux_model, metadata.max_len)
@@ -153,6 +153,5 @@ if __name__ == '__main__':
                     fixed_sampling_labels, fixed_sampling_z, max_len=metadata.max_len)
                 tf.contrib.summary.image(
                     'sample', gen_plot(test_samples.numpy(), g_model.num_labels), step=epoch)
-            tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
-            file_writer.flush()
-            checkpoint.save(file_prefix=save_prefix)
+                file_writer.flush()
+                checkpoint.save(file_prefix=save_prefix)

@@ -161,12 +161,13 @@ def train_rvae(model, train_data, optim):
     epoch_kl_metric = kl_metric.result()
     epoch_loss = epoch_recon_metric+epoch_kl_metric
 
-    return epoch_recon_metric  # , epoch_kl_metric, epoch_loss
+    return epoch_recon_metric, epoch_kl_metric  # epoch_loss
 
 
 def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len=128):
     loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
+    kl_metric = tf.keras.metrics.Mean()
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
         train_x = batch_x[:, :-1, :]
@@ -174,8 +175,11 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
         init_hidden = g_model.init_hidden(batch_size)
         with tf.GradientTape() as d_tape, tf.GradientTape() as g_tape:
             # Reconsturction error
-            batch_preds, _, _ = g_model(train_x, batch_y)
+            batch_preds, mu, log_var = g_model(train_x, batch_y)
             recon_loss = mse_loss(train_y, batch_preds)
+            kl_loss = -0.5 * tf.reduce_mean(tf.reduce_mean(1 + log_var - mu**2 -
+                                                           tf.exp(log_var), axis=1), axis=0)
+            kl_metric.update_state(kl_loss)
             # Train discriminator
             sampling_size = max(1, batch_size//g_model.num_labels)
             cond_labels = tf.random.uniform(
@@ -206,8 +210,16 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
             # g_loss
             g_adv_loss = sparse_softmax_cross_entropy(
                 cond_labels, d_out_fake) / batch_size
+            _, z_recon, _ = g_model.encoder(samples)
+
+            print(z_recon.shape, sampling_z.shape)
+            z_loss = tf.reduce_mean(tf.reduce_mean(
+                tf.squared_difference(sampling_z, z_recon), axis=1), axis=0)
+
             g_recon_loss = recon_loss
-            g_loss = g_adv_loss + 100 * g_recon_loss
+            print('\t', recon_loss, ' ', z_loss)
+            g_loss = g_adv_loss + 100 * g_recon_loss + 0.1 * \
+                z_loss + tf.maximum(kl_loss, 0.10/batch_size)
 
         print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
         loss_metric.update_state(g_loss)
@@ -219,12 +231,12 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
         g_optim.apply_gradients(
             zip(g_clipped_grads, g_model.trainable_variables))
 
-    return loss_metric.result(), d_accuracy_metric.result()
+    return loss_metric.result(), d_accuracy_metric.result(), kl_metric.result()
 
 
 def train_mse_epoch(model, train_data, optim):
     if isinstance(model, CGARNNModel):
-        return mse_train_g_epoch(model, train_data, optim)
+        return mse_train_g_epoch(model, train_data, optim), 0
     elif isinstance(model, RVAEModel):
         return train_rvae(
             model, train_data, optim)
@@ -232,7 +244,7 @@ def train_mse_epoch(model, train_data, optim):
 
 def train_adv_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len):
     if isinstance(g_model, CGARNNModel):
-        return crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len)
+        return crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len), 0
     elif isinstance(g_model, RVAEModel):
         return rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len)
 
