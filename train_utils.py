@@ -36,7 +36,7 @@ def mse_train_g_epoch(model, train_data, optim):
         grads = gt.gradient(batch_loss, model.trainable_variables)
         optim.apply_gradients(zip(grads, model.trainable_variables))
 
-    return loss_metric.result()
+    return loss_metric.result(),
 
 
 def train_d_model_batch(g_model, d_model, batch_x, batch_y, d_optim, max_len):
@@ -218,7 +218,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
 
             g_recon_loss = recon_loss
             print('\t', recon_loss, ' ', z_loss)
-            g_loss = g_adv_loss + 100 * g_recon_loss + 0.1 * \
+            g_loss = g_adv_loss + 100 * g_recon_loss + 1000 * \
                 z_loss + tf.maximum(kl_loss, 0.10/batch_size)
 
         print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
@@ -236,7 +236,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
 
 def train_mse_epoch(model, train_data, optim):
     if isinstance(model, CGARNNModel):
-        return mse_train_g_epoch(model, train_data, optim), 0
+        return (*mse_train_g_epoch(model, train_data, optim), 0)
     elif isinstance(model, RVAEModel):
         return train_rvae(
             model, train_data, optim)
@@ -244,7 +244,8 @@ def train_mse_epoch(model, train_data, optim):
 
 def train_adv_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len):
     if isinstance(g_model, CGARNNModel):
-        return crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len), 0
+        return (*crnn_adv_train_epoch(
+            g_model, d_model, train_data, g_optim, d_optim, max_len), 0)
     elif isinstance(g_model, RVAEModel):
         return rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len)
 
