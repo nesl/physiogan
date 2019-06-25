@@ -138,7 +138,7 @@ if __name__ == '__main__':
                             g_model, d_model, train_data, d_optim, metadata.max_len)
                         print('pre: {} - {}'.format(ii, d_acc))
                 epoch_loss, epoch_acc, kl_loss = train_adv_epoch(
-                    g_model, d_model, train_data, g_optim, d_optim, metadata.max_len)
+                    g_model, d_model, train_data, g_optim, d_optim, epoch, metadata.max_len)
 
                 print('{} - {}'.format(epoch, epoch_acc))
             tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)

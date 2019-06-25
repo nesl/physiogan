@@ -4,12 +4,18 @@ Auxiliary methods for model training
 
 import tensorflow as tf
 from tensorflow.losses import sparse_softmax_cross_entropy
+import numpy as np
 import matplotlib.pyplot as plt
+
 import tb_utils
 # Losses
 
 
 from models import CGARNNModel, RVAEModel
+
+
+def inverse_sigmoid(i, k=600):
+    return k / (k+np.exp(i/k))
 
 
 def mse_loss(y, y_hat):
@@ -78,7 +84,7 @@ def adv_train_d_epoch(g_model, d_model, train_data, d_optim, max_len):
     return loss_metric.result(), d_accuracy_metric.result()
 
 
-def crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len=128):
+def crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
     g_loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
     for batch_x, batch_y in train_data:
@@ -164,10 +170,11 @@ def train_rvae(model, train_data, optim):
     return epoch_recon_metric, epoch_kl_metric  # epoch_loss
 
 
-def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len=128):
+def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
     loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
     kl_metric = tf.keras.metrics.Mean()
+    ratio = inverse_sigmoid(epoch_idx)
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
         train_x = batch_x[:, :-1, :]
@@ -218,8 +225,9 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len
 
             g_recon_loss = recon_loss
             print('\t', recon_loss, ' ', z_loss)
-            g_loss = g_adv_loss + 100 * g_recon_loss + 1000 * \
-                z_loss + tf.maximum(kl_loss, 0.10/batch_size)
+            g_loss = (ratio) * (100*g_recon_loss) + \
+                (1-ratio)*(10 * z_loss + g_adv_loss +
+                           tf.maximum(kl_loss, 0.10/batch_size))
 
         print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
         loss_metric.update_state(g_loss)
@@ -242,12 +250,12 @@ def train_mse_epoch(model, train_data, optim):
             model, train_data, optim)
 
 
-def train_adv_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len):
+def train_adv_epoch(g_model, d_model, train_data, g_optim, d_optim,  epoch_idx, max_len):
     if isinstance(g_model, CGARNNModel):
         return (*crnn_adv_train_epoch(
-            g_model, d_model, train_data, g_optim, d_optim, max_len), 0)
+            g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len), 0)
     elif isinstance(g_model, RVAEModel):
-        return rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, max_len)
+        return rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len)
 
 
 def gen_plot(samples, num_labels):
