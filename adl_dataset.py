@@ -8,16 +8,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
-
-def subsample(signal, stride):
-    win_size = 2*stride+1
-    conv_filter = np.ones(shape=(2*stride+1,))/win_size
-    if len(np.shape(signal)) == 2:
-        output = np.stack([np.convolve(signal[:, i], conv_filter, mode='same')
-                           for i in range(np.shape(signal)[1])], axis=1)
-    else:
-        output = np.convolve(signal, conv_filter, mode='same')
-    return output[::stride]
+from data_preprocs import subsample
 
 
 class ADLDataset:
@@ -34,7 +25,9 @@ class ADLDataset:
             self.classes = ['Climb_stairs', 'Comb_hair',
                             'Descend_stairs', 'Sitdown_chair']
             self.num_labels = len(self.classes)
-            self.max_len = self.max_len // self.subsample_every
+        else:
+            self.subsample_every = 2
+        self.max_len = self.max_len // self.subsample_every
         self.ds_root = ds_root
         self.is_train = is_train
         self.class2idx = {c: i for i, c in enumerate(self.classes)}
@@ -57,6 +50,9 @@ class ADLDataset:
             # TODO(malzantot): try smoothing istead of subsampling.
             data = [subsample(x, self.subsample_every).astype(
                 np.float32) for x in data]
+        else:
+            data = [subsample(x, 2).astype(
+                np.float32) for x in data]
         data = [x[:self.max_len, :] for x in data]
         all_data = (np.array(data)/100)-0.5
         all_labels = np.array(labels).astype(np.int32)
@@ -77,7 +73,7 @@ class ADLDataset:
 
 
 if __name__ == '__main__':
-    adl_dataset = ADLDataset('dataset/adl', is_train=True, mini=True)
+    adl_dataset = ADLDataset('dataset/adl', is_train=True, mini=False)
     print(adl_dataset.class2idx)
     print(adl_dataset.data.shape)
     print(adl_dataset.labels.shape)
