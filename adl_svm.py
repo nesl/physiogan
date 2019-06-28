@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 if __name__ == '__main__':
     train_dataset = ADLDataset('dataset/adl', is_train=True, mini=True)
 
-    train_dataset = SynDataset('samples/adl_crnn/06_25_09_43', None)
+    train_dataset = SynDataset('samples/adl_crnn/06_27_18_59', None)
     train_data, train_labels = train_dataset.data, train_dataset.labels
     train_X = get_all_feats(train_data)
     test_dataset = ADLDataset('dataset/adl', is_train=False, mini=True)
@@ -19,7 +19,7 @@ if __name__ == '__main__':
     test_X = get_all_feats(test_data)
 
     # Train classifier
-    clf = SVC(kernel='rbf', C=1000, class_weight='balanced')
+    clf = SVC(kernel='rbf', C=100, class_weight='balanced')
     #clf = tree.DecisionTreeClassifier()
     #clf = LogisticRegression()
     # clf = MLPClassifier(hidden_layer_sizes=(
