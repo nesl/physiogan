@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 if __name__ == '__main__':
     train_dataset = ADLDataset('dataset/adl', is_train=True, mini=True)
 
-    train_dataset = SynDataset('samples/adl_crnn/06_27_18_59', None)
+    train_dataset = SynDataset('samples/adl_crnn/06_28_15_24', None)
     train_data, train_labels = train_dataset.data, train_dataset.labels
     train_X = get_all_feats(train_data)
     test_dataset = ADLDataset('dataset/adl', is_train=False, mini=True)

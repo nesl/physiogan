@@ -225,7 +225,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
 
             g_recon_loss = recon_loss
             print('\t', recon_loss, ' ', z_loss)
-            g_loss = (ratio + 0.05) * (100*g_recon_loss) + \
+            g_loss = (ratio + 0.25) * (100*g_recon_loss) + \
                 (1-ratio)*(10 * z_loss + g_adv_loss +
                            tf.maximum(kl_loss, 0.10/batch_size))
 
