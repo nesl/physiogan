@@ -38,7 +38,8 @@ flags.DEFINE_string('aux_restore', None,
                     'checkpoint directory for discriminator')
 flags.DEFINE_boolean('sample', False, 'Generate Samples')
 flags.DEFINE_string('model_type', 'crnn', 'MOdel name')
-
+flags.DEFINE_boolean('filter_samples', False,
+                     'Use discriminator to filter samples')
 
 if __name__ == '__main__':
     FLAGS = flags.FLAGS
@@ -79,11 +80,13 @@ if __name__ == '__main__':
         model_tag, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
     save_dir = './save/{}'.format(model_name)
-
+    d_save_dir = os.path.join(save_dir, 'disc')
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
+        os.mkdir(d_save_dir)
 
     save_prefix = '{}/ckpt'.format(save_dir)
+    d_save_prefix = '{}/ckpt'.format(d_save_dir)
 
     fixed_sampling_batch = 3
     fixed_sampling_size = fixed_sampling_batch*metadata.num_labels
@@ -96,12 +99,20 @@ if __name__ == '__main__':
     tf.contrib.summary.image('sample', gen_plot(
         test_samples.numpy(), metadata.num_labels), step=0)
     checkpoint = tf.train.Checkpoint(model=g_model)
+    disc_checkpoint = tf.train.Checkpoint(model=d_model)
     if FLAGS.restore is not None:
         ckpt_name = tf.train.latest_checkpoint('./save/'+FLAGS.restore)
         print(ckpt_name)
         status = checkpoint.restore(ckpt_name)
         # status.assert_consumed()
-        print('Model restored from {}'.format(ckpt_name))
+        print('G Model restored from {}'.format(ckpt_name))
+
+        d_ckpt_name = tf.train.latest_checkpoint(
+            './save/'+FLAGS.restore+'/disc')
+        print(d_ckpt_name)
+        status = disc_checkpoint.restore(d_ckpt_name)
+        # status.assert_consumed()
+        print('D Model restored from {}'.format(d_ckpt_name))
 
     if FLAGS.sample:
         assert FLAGS.restore is not None, 'Must provide checkpoint'
@@ -113,13 +124,26 @@ if __name__ == '__main__':
         sampling_z = tf.random_normal(shape=(sampling_size, g_model.z_dim))
         samples = g_model.sample(cond_labels, sampling_z,
                                  max_len=metadata.max_len)
+
+        samples = samples.numpy()
+        cond_labels = cond_labels.numpy()
+
+        if FLAGS.filter_samples:
+            d_out = tf.argmax(d_model(samples), axis=1)
+            d_out = d_out.numpy()
+            selected_samples = samples[np.where(d_out == cond_labels)]
+            selected_labels = cond_labels[np.where(d_out == cond_labels)]
+        else:
+            selected_labels = cond_labels
+            selected_samples = samples
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
+
         if not os.path.exists(samples_out_dir):
             os.makedirs(samples_out_dir)
-        np.save('{}/samples_x.npy'.format(samples_out_dir), samples)
-        np.save('{}/samples_y.npy'.format(samples_out_dir), cond_labels.numpy())
+        np.save('{}/samples_x.npy'.format(samples_out_dir), selected_samples)
+        np.save('{}/samples_y.npy'.format(samples_out_dir), selected_labels)
         print('Saved {} samples to {}'.format(
-            samples.shape[0], samples_out_dir))
+            selected_samples.shape[0], samples_out_dir))
         sys.exit(0)
     file_writer = tf.contrib.summary.create_file_writer(log_dir)
 
@@ -155,3 +179,4 @@ if __name__ == '__main__':
                     'sample', gen_plot(test_samples.numpy(), g_model.num_labels), step=epoch)
                 file_writer.flush()
                 checkpoint.save(file_prefix=save_prefix)
+                disc_checkpoint.save(file_prefix=d_save_prefix)
