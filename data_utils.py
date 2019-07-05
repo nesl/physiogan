@@ -8,7 +8,7 @@ from dummy_dataset import DummyDataset
 from cinc_dataset import CINCDataset
 
 Metadata = namedtuple(
-    'Point', ['num_feats', 'num_labels', 'classes', 'max_len'], verbose=False)
+    'Point', ['num_feats', 'num_labels', 'classes', 'max_len', 'num_examples'], verbose=False)
 
 
 class DataFactory:
@@ -35,5 +35,5 @@ class DataFactory:
         test_data = dset_class(dset_root, is_train=False, mini=True)
 
         dset_meta = Metadata(train_data.num_feats,
-                             train_data.num_labels, train_data.classes, train_data.max_len)
+                             train_data.num_labels, train_data.classes, train_data.max_len, train_data.labels.shape[0])
         return train_data.to_dataset(), test_data.to_dataset(), dset_meta

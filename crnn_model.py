@@ -117,7 +117,7 @@ if __name__ == '__main__':
     if FLAGS.sample:
         assert FLAGS.restore is not None, 'Must provide checkpoint'
         uniform_logits = tf.log([[10.0 for _ in range(metadata.num_labels)]])
-        sampling_size = 10000
+        sampling_size = metadata.num_examples
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
