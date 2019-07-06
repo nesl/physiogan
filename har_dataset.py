@@ -14,7 +14,7 @@ class HARDataset:
 
     num_labels = 6
     num_feats = 6
-    max_len = 64
+    max_len = 32
 
     def __init__(self, path, is_train=True, mini=None):
         self.path = path
@@ -35,8 +35,8 @@ class HARDataset:
                 data_path, 'Inertial Signals',
                 '{}_{}.txt'.format(name, name_suffix))).astype(np.float32), axis=2) for name in files_list]
         data = np.concatenate(data_list, axis=2)
-        data = np.array([subsample(x, 2).astype(
-                np.float32) for x in data])
+        data = np.array([subsample(x, 4).astype(
+            np.float32) for x in data])
         self.data = data
         self.labels = np.loadtxt(os.path.join(
             data_path, 'y_{}.txt'.format(name_suffix))).astype(np.int32) - 1
