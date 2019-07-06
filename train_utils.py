@@ -13,8 +13,8 @@ import tb_utils
 
 from models import CGARNNModel, RVAEModel
 
-
-def inverse_sigmoid(i, k=600):
+# use k=600 for adl dataset
+def inverse_sigmoid(i, k=200):
     return k / (k+np.exp(i/k))
 
 
