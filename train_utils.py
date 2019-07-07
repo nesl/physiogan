@@ -14,6 +14,8 @@ import tb_utils
 from models import CGARNNModel, RVAEModel
 
 # use k=600 for adl dataset
+
+
 def inverse_sigmoid(i, k=600):
     return k / (k+np.exp(i/k))
 
@@ -226,7 +228,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
             g_recon_loss = recon_loss
             print('\t', recon_loss, ' ', z_loss)
             g_loss = (ratio + 0.25) * (100*g_recon_loss) + \
-                (1-ratio)*(10 * z_loss + 100*g_adv_loss +
+                (1-ratio)*(10 * z_loss + 50*g_adv_loss +
                            tf.maximum(kl_loss, 0.10/batch_size))
 
         print('\t', d_loss.numpy(), ' ; ', g_loss.numpy())
