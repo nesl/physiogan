@@ -1,3 +1,6 @@
+import matplotlib as mpl
+mpl.use('agg')
+
 from sklearn.metrics import confusion_matrix
 from tb_utils import plot_confusion_matrix, fig_to_image_tensor
 from syn_dataset import SynDataset
@@ -11,8 +14,6 @@ import sys
 import datetime
 import numpy as np
 
-import matplotlib as mpl
-mpl.use('agg')
 
 
 tf.enable_eager_execution()

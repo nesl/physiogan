@@ -1,6 +1,8 @@
 """
 Conditional genration using RNN
 """
+import matplotlib as mpl
+mpl.use('agg')
 
 from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
 from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
@@ -14,8 +16,6 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import io
-import matplotlib as mpl
-mpl.use('agg')
 
 
 tf.enable_eager_execution()
@@ -57,7 +57,9 @@ if __name__ == '__main__':
     elif FLAGS.model_type == 'rvae':
         g_model = RVAEModel(num_feats=metadata.num_feats,
                             z_dim=FLAGS.z_dim,
-                            num_labels=metadata.num_labels)
+                            num_labels=metadata.num_labels,
+                            enc_rnn_units=FLAGS.num_units,
+                            dec_rnn_units=FLAGS.num_units)
     else:
         raise NotImplementedError("Unsupported model type")
     g_optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
