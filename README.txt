@@ -1,42 +1,25 @@
 ##Synthetic Bio-sensor data generation
 
-###HAR experiment
 
-####Classification model
-Train the classification model
-```
- python har_model.py
-```
 
-Evaluate classification model
-```
- python har_model.py --evaluate --restore=xxx/xxx
-```
-
-To train on synthetic dataset
+Install requirements
 
 ```
-python har_model.py --train_syn=PATH_of_synthetic_dataset
+pip install -r requirements.txt
 ```
 
-To use the model to verify the matching rate of labels of synthetic damples
+Download datasets
 
 ```
- python har_model.py --evaluate_syn=PATH_of_synthetic_dataset --restore=xxx/xxx
-
+bash download_adl_dataset.sh
+bash download_har_dataset.sh
 ```
 
+Train classifiers
 
-###Generative model (Conditional-RNN)
-
-Training the model
 
 ```
- python crnn_model.py 
- ```
-
-Generating samples from it
+python classification_model.py --dataset=xxx --num_epochs=200
 ```
- python crnn_model.py --sample --restore=MODEL_CHECKPOINT_PATH
- ```
 
+where xxx is one of [har, adl]

@@ -22,9 +22,9 @@ class ConvDiscriminator(tf.keras.Model):
         out = self.conv1(x)
         out = self.conv2(out)
         out = self.conv3(out)
-        out = tf.reshape(out, [batch_size, -1])
-        out = self.fc_out(out)
-        return out
+        last_feats = tf.reshape(out, [batch_size, -1])
+        out = self.fc_out(last_feats)
+        return out, last_feats
 
 
 class RNNDiscriminator(tf.keras.Model):
@@ -43,7 +43,7 @@ class RNNDiscriminator(tf.keras.Model):
         out, last_h = self.lstm(x)
         last_out = out[:, -1, :]
         out = self.fc_out(last_out)
-        return out
+        return out, last_out
 
 
 class ClassModel(tf.keras.Model):
