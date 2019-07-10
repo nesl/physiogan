@@ -1,21 +1,20 @@
 """
 Conditional genration using RNN
 """
+import io
+import os
+import sys
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers
+import datetime
+from data_utils import DataFactory
+import tb_utils
+from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
+from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
 import matplotlib as mpl
 mpl.use('agg')
-
-from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
-from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
-import tb_utils
-from data_utils import DataFactory
-import datetime
-from tensorflow.keras import layers
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
-import sys
-import os
-import io
 
 
 tf.enable_eager_execution()
@@ -25,8 +24,11 @@ flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 32, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
 flags.DEFINE_integer('z_dim', 32, 'Size of latent space noise vector')
+flags.DEFINE_boolean('bidir_encoder', True, 'Use a bidirectional encoder')
+flags.DEFINE_boolean(
+    'z_context', True, 'Use z as a context input to the decoder timesteps')
 flags.DEFINE_integer(
-    "mle_epochs", 10, "Number of epochs to train using MLE only")
+    "mle_epochs", 0, "Number of epochs to train using MLE only")
 flags.DEFINE_integer('disc_pre_train_epochs', 5,
                      'Number of epochs to pre-train the discriminator')
 flags.DEFINE_integer('num_units', 64, 'Number of RNN units')
@@ -59,7 +61,8 @@ if __name__ == '__main__':
                             z_dim=FLAGS.z_dim,
                             num_labels=metadata.num_labels,
                             enc_rnn_units=FLAGS.num_units,
-                            dec_rnn_units=FLAGS.num_units)
+                            dec_rnn_units=FLAGS.num_units,
+                            bidir_encoder=FLAGS.bidir_encoder)
     else:
         raise NotImplementedError("Unsupported model type")
     g_optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
@@ -119,7 +122,7 @@ if __name__ == '__main__':
     if FLAGS.sample:
         assert FLAGS.restore is not None, 'Must provide checkpoint'
         uniform_logits = tf.log([[10.0 for _ in range(metadata.num_labels)]])
-        sampling_size = metadata.num_examples
+        sampling_size = 10*metadata.num_examples
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)

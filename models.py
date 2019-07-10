@@ -130,12 +130,16 @@ class CGARNNModel(tf.keras.Model):
 
 
 class RNNEncoder(tf.keras.Model):
-    def __init__(self, rnn_units=64, z_dim=64):
+    def __init__(self, rnn_units=64, z_dim=64, bidirectional=True):
         super(RNNEncoder, self).__init__()
         self.rnn_units = rnn_units
         self.z_dim = z_dim
+        self.bidirectional = bidirectional
         self.gru = layers.CuDNNGRU(
             self.rnn_units, return_state=True, return_sequences=True)
+        if self.bidirectional:
+            self.gru = layers.Bidirectional(
+                layer=self.gru, merge_mode='concat')
         self.fc_mu = layers.Dense(self.z_dim)
         self.fc_logvar = layers.Dense(self.z_dim)
 
@@ -146,8 +150,18 @@ class RNNEncoder(tf.keras.Model):
     def __call__(self, x, hidden=None):
         batch_size, time_len, feat_size = x.shape
         if hidden is None:
-            hidden = tf.zeros([batch_size, self.rnn_units])
-        outputs, last_hidden = self.gru(x, hidden)
+            if self.bidirectional:
+                hidden = [tf.zeros([batch_size, self.rnn_units])
+                          for _ in range(2)]
+            else:
+                hidden = tf.zeros([batch_size, self.rnn_units])
+
+        if self.bidirectional:
+            # TODO(malzantot): why it doesn't accept hidden state here ?!
+            outputs, forward_last_h, backward_last_h = self.gru(x)
+            last_hidden = tf.concat([forward_last_h, backward_last_h], axis=1)
+        else:
+            outputs, last_hidden = self.gru(x, hidden)
         mu = self.fc_mu(last_hidden)
         log_var = self.fc_logvar(last_hidden)
         sigma = tf.exp(log_var/2)
@@ -191,15 +205,16 @@ class RNNDecoder(tf.keras.Model):
 
 class RVAEModel(tf.keras.Model):
 
-    def __init__(self, enc_rnn_units=64, z_dim=64, dec_rnn_units=64, num_feats=6, num_labels=6, z_input=True):
+    def __init__(self, enc_rnn_units=64, z_dim=64, dec_rnn_units=64, num_feats=6, num_labels=6, bidir_encoder=True, z_context=True):
         super(RVAEModel, self).__init__()
         self.enc_rnn_units = enc_rnn_units
         self.z_dim = z_dim
         self.dec_rnn_units = dec_rnn_units
         self.num_feats = num_feats
         self.num_labels = num_labels
-        self.z_input = z_input
-        self.encoder = RNNEncoder(enc_rnn_units, z_dim=z_dim)
+        self.z_context = z_context
+        self.encoder = RNNEncoder(
+            enc_rnn_units, z_dim=z_dim, bidirectional=bidir_encoder)
         self.decoder = RNNDecoder(dec_rnn_units, num_feats, num_labels)
         self.fc_z = layers.Dense(6)
         self.fc_hidden = layers.Dense(3*self.dec_rnn_units)
@@ -214,7 +229,7 @@ class RVAEModel(tf.keras.Model):
 
         init_step = tf.zeros_like(x[:, 0:1, :])
         dec_input = tf.concat([init_step, x[:, :-1]], axis=1)
-        if self.z_input:
+        if self.z_context:
             z_emb = self.fc_z(z)
             z_with_time = tf.tile(tf.expand_dims(
                 z_emb, 1), [1, time_len, 1])
@@ -239,7 +254,7 @@ class RVAEModel(tf.keras.Model):
         z_emb = self.fc_z(z)
         z_with_time = tf.expand_dims(z_emb, axis=1)
         for _ in range(max_len):
-            if self.z_input:
+            if self.z_context:
                 step_input = tf.concat([z_with_time, last_pred], axis=2)
             else:
                 step_input = last_pred

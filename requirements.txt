@@ -1,0 +1,3 @@
+matplotlib
+scikit-learn
+tensorflow-gpu==1.14.0
