@@ -172,6 +172,55 @@ def train_rvae(model, train_data, optim):
     return epoch_recon_metric, epoch_kl_metric  # epoch_loss
 
 
+def rcgan_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
+    loss_metric = tf.keras.metrics.Mean()
+    d_accuracy_metric = tf.keras.metrics.Accuracy()
+    for batch_x, batch_y in train_data:
+        batch_size = int(batch_x.shape[0])
+        with tf.GradientTape() as d_tape, tf.GradientTape() as g_tape:
+            # Train discriminator
+            sampling_size = max(1, batch_size//g_model.num_labels)
+            cond_labels = tf.random.uniform(
+                minval=0, maxval=g_model.num_labels, shape=(sampling_size,), dtype=tf.int32)
+
+            sampling_z = tf.random_normal(shape=(sampling_size, g_model.z_dim))
+            samples = g_model.sample(cond_labels, sampling_z,
+                                     max_len=max_len)
+            d_out_real, _ = d_model(batch_x[:, ::, :])
+            d_out_fake, _ = d_model(samples[:, ::, :])
+
+            # d_loss
+            d_out = tf.concat([d_out_real, d_out_fake], axis=0)
+            d_target = tf.concat([batch_y,
+                                  d_model.num_labels*tf.ones(shape=(sampling_size,), dtype=tf.int32)], axis=0)
+            d_pred = tf.argmax(d_out, axis=1)
+            d_loss = sparse_softmax_cross_entropy(
+                d_target, d_out) / int(d_target.shape[0])
+
+            d_accuracy_metric.update_state(d_target, d_pred)
+
+            # Train generator
+            cond_labels = tf.random.uniform(
+                minval=0, maxval=g_model.num_labels, shape=(batch_size,), dtype=tf.int32)
+            sampling_z = tf.random_normal(shape=(batch_size, g_model.z_dim))
+            samples = g_model.sample(cond_labels, sampling_z,
+                                     max_len=max_len)
+            d_out_fake, _ = d_model(samples[:, ::, :])
+            # g_loss
+            g_adv_loss = sparse_softmax_cross_entropy(
+                cond_labels, d_out_fake) / batch_size
+        loss_metric.update_state(g_loss)
+        d_grads = d_tape.gradient(d_loss, d_model.trainable_variables)
+        d_optim.apply_gradients(zip(d_grads, d_model.trainable_variables))
+
+        g_grads = g_tape.gradient(g_loss, g_model.trainable_variables)
+        g_clipped_grads, _ = tf.clip_by_global_norm(g_grads, 1.0)
+        g_optim.apply_gradients(
+            zip(g_clipped_grads, g_model.trainable_variables))
+
+    return loss_metric.result(), d_accuracy_metric.result(), 0
+
+
 def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
     loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
@@ -189,9 +238,10 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
             kl_loss = -0.5 * tf.reduce_mean(tf.reduce_mean(1 + log_var - mu**2 -
                                                            tf.exp(log_var), axis=1), axis=0)
             kl_metric.update_state(kl_loss)
-
-            _, feats_orig = d_model(train_y)
-            _, feats_recon = d_model(batch_preds)
+            zeros_pad = tf.zeros_like(train_x[:, 0:1, :])
+            _, feats_orig = d_model(tf.concat([zeros_pad, train_y], axis=1))
+            _, feats_recon = d_model(
+                tf.concat([zeros_pad, batch_preds], axis=1))
 
             adv_feats_loss = tf.reduce_mean(tf.reduce_mean(
                 tf.squared_difference(feats_orig, feats_recon)))

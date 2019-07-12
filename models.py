@@ -285,3 +285,38 @@ class RVAEModel(tf.keras.Model):
             preds.append(last_pred)
         output = tf.concat(preds, axis=1)
         return output
+
+
+class CRGANModel(tf.keras.Model):
+    def __init__(self, num_feats, num_labels, z_dim, num_units, z_context=True):
+        super(CRGANModel, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.z_dim = z_dim
+        self.num_units = num_units
+        self.num_layers = 3
+        self.fc_hidden = layers.Dense(3*self.num_units)
+        self.fc_z = layers.Dense(6)
+        self.decoder = RNNDecoder(
+            self.num_units, self.num_feats, self.num_labels)
+
+    def __call__(self, labels, z=None, max_len=125):
+        """ generates samples conditioned on the given label """
+        num_examples = int(labels.shape[0])
+        if z is None:
+            z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
+        last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
+        preds = []
+        last_state = tf.reshape(self.noise2hidden(z), [3, num_examples, -1])
+        z_emb = self.fc_z(z)
+        z_with_time = tf.expand_dims(z_emb, axis=1)
+        for _ in range(max_len):
+            if self.z_context:
+                step_input = tf.concat([z_with_time, last_pred], axis=2)
+            else:
+                step_input = last_pred
+            last_pred, last_state = self.decoder(
+                step_input, last_state, labels)
+            preds.append(last_pred)
+        output = tf.concat(preds, axis=1)
+        return output
