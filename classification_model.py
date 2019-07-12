@@ -1,19 +1,17 @@
+import numpy as np
+import datetime
+import sys
+import os
+from models import ClassModel, ConvClassModel
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import layers
+from data_utils import DataFactory
+from syn_dataset import SynDataset
+from tb_utils import plot_confusion_matrix, fig_to_image_tensor
+from sklearn.metrics import confusion_matrix
 import matplotlib as mpl
 mpl.use('agg')
-
-from sklearn.metrics import confusion_matrix
-from tb_utils import plot_confusion_matrix, fig_to_image_tensor
-from syn_dataset import SynDataset
-from data_utils import DataFactory
-from tensorflow.keras import layers
-import tensorflow as tf
-import matplotlib.pyplot as plt
-from models import ClassModel
-import os
-import sys
-import datetime
-import numpy as np
-
 
 
 tf.enable_eager_execution()
@@ -102,7 +100,13 @@ if __name__ == '__main__':
     train_data = train_data.batch(FLAGS.batch_size)
     test_data = test_data.batch(FLAGS.batch_size)
 
-    model = ClassModel(metadata.num_feats, metadata.num_labels)
+    if FLAGS.model_name == 'lstm':
+        model = ClassModel(metadata.num_feats, metadata.num_labels)
+    elif FLAGS.model_name == 'cnn':
+        model = ConvClassModel(metadata.num_feats, metadata.num_labels)
+    else:
+        raise NotImplementedError("Unsupported classifier")
+
     optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
 
     model_name = '{}/{}'.format(

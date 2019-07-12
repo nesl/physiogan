@@ -8,7 +8,6 @@ class ConvDiscriminator(tf.keras.Model):
         super(ConvDiscriminator, self).__init__()
         self.num_feats = num_feats
         self.num_labels = num_labels
-        self.emb_layer = layers.Embedding(self.num_labels, 32)
         self.conv1 = layers.Conv1D(32, kernel_size=(
             3), strides=(3), padding='same', activation='relu')
         self.conv2 = layers.Conv1D(32, kernel_size=(
@@ -69,6 +68,29 @@ class ClassModel(tf.keras.Model):
         out, last_h = self.lstm2(out)
         out, last_h = self.lstm3(out)
         out = self.fc(out[:, -1, :])
+        return out
+
+
+class ConvClassModel(tf.keras.Model):
+    def __init__(self, num_feats, num_labels):
+        super(ConvClassModel, self).__init__()
+        self.num_feats = num_feats
+        self.num_labels = num_labels
+        self.conv1 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.conv2 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.conv3 = layers.Conv1D(32, kernel_size=(
+            3), strides=(3), padding='same', activation='relu')
+        self.fc_out = layers.Dense(self.num_labels)
+
+    def __call__(self, x):
+        batch_size, time_len, _ = x.shape
+        out = self.conv1(x)
+        out = self.conv2(out)
+        out = self.conv3(out)
+        last_feats = tf.reshape(out, [batch_size, -1])
+        out = self.fc_out(last_feats)
         return out
 
 
