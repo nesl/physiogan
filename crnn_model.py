@@ -39,6 +39,8 @@ flags.DEFINE_string('restore', None, 'checkpoint directory')
 flags.DEFINE_string('aux_restore', None,
                     'checkpoint directory for discriminator')
 flags.DEFINE_boolean('sample', False, 'Generate Samples')
+flags.DEFINE_float('sampling_scale', 1.0,
+                   'Scale of sampling size relative to the training size')
 flags.DEFINE_string('model_type', 'crnn', 'MOdel name')
 flags.DEFINE_boolean('filter_samples', False,
                      'Use discriminator to filter samples')
@@ -122,7 +124,7 @@ if __name__ == '__main__':
     if FLAGS.sample:
         assert FLAGS.restore is not None, 'Must provide checkpoint'
         uniform_logits = tf.log([[10.0 for _ in range(metadata.num_labels)]])
-        sampling_size = metadata.num_examples
+        sampling_size = int(FLAGS.sampling_scale * metadata.num_examples)
         cond_labels = tf.cast(tf.random.categorical(
             uniform_logits, sampling_size), tf.int32)
         cond_labels = tf.squeeze(cond_labels)
