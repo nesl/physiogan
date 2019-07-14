@@ -7,6 +7,7 @@ from adl_dataset import ADLDataset
 from dummy_dataset import DummyDataset
 from cinc_dataset import CINCDataset
 from ecg2lead_dataset import ECG2LeadDataset
+from ecg200_dataset import ECG200Dataset
 
 Metadata = namedtuple(
     'Point', ['num_feats', 'num_labels', 'classes', 'max_len', 'num_examples'], verbose=False)
@@ -29,6 +30,9 @@ class DataFactory:
         elif dset_name == 'ecg2lead':
             dset_root = 'dataset/ecg2lead'
             dset_class = ECG2LeadDataset
+        elif dset_name == 'ecg200':
+            dset_root = 'dataset/ecg200'
+            dset_class = ECG200Dataset
         elif dset_name == 'dummy':
             dset_root = None
             dset_class = DummyDataset
