@@ -8,7 +8,7 @@ from dummy_dataset import DummyDataset
 from cinc_dataset import CINCDataset
 from ecg2lead_dataset import ECG2LeadDataset
 from ecg200_dataset import ECG200Dataset
-
+from ecg_dataset import ECGDataset
 Metadata = namedtuple(
     'Point', ['num_feats', 'num_labels', 'classes', 'max_len', 'num_examples'], verbose=False)
 
@@ -33,11 +33,14 @@ class DataFactory:
         elif dset_name == 'ecg200':
             dset_root = 'dataset/ecg200'
             dset_class = ECG200Dataset
+        elif dset_name == 'ecg':
+            dset_root = 'dataset/ecg_data'
+            dset_class = ECGDataset
         elif dset_name == 'dummy':
             dset_root = None
             dset_class = DummyDataset
         else:
-            raise Exception("Invalid dataset requested")
+            raise Exception("Invalid dataset requested", dset_name)
 
         train_data = dset_class(dset_root, is_train=True, mini=True)
         test_data = dset_class(dset_root, is_train=False, mini=True)
