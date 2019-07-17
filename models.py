@@ -259,6 +259,33 @@ class RVAEModel(tf.keras.Model):
         recon_output, _ = self.decoder(dec_input, dec_init_state, y)
         return recon_output, mu, log_var
 
+    def impute(self, x, y, mask):
+        batch_size, time_len, feat_dim = x.shape
+        z, mu, log_var = self.encoder(x)
+        decoder_outputs = []
+        last_pred = tf.zeros(shape=(batch_size, 1, feat_dim))
+        z_emb = self.fc_z(z)
+        last_state = tf.reshape(self.noise2hidden(z), [3, batch_size, -1])
+        z_with_time = tf.expand_dims(z_emb, axis=1)
+        preds = []
+        for step in range(time_len):
+            if step == 0 or mask[0, step, 0] == 0:
+                step_input = last_pred
+            else:
+                step_input = x[:, step-1:step, :]
+            if self.z_context:
+                step_input = tf.concat([z_with_time, step_input], axis=2)
+
+            last_pred, last_state = self.decoder(
+                step_input, last_state, y)
+            if mask[0, step, 0] == 0:
+                preds.append(last_pred)
+            else:
+                preds.append(x[:, step:step+1, :])
+
+        output = tf.concat(preds, axis=1)
+        return output
+
     def noise2hidden(self, z):
         return self.fc_hidden(z)
 
