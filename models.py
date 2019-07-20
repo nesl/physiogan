@@ -135,6 +135,7 @@ class CGARNNModel(tf.keras.Model):
         batch_size = z.shape[0]
         out = self.fc_z2h(z)
         out = tf.reshape(out, shape=(self.num_layers, batch_size, -1))
+        out = tf.math.tanh(out)
         return out
 
     def sample(self, labels, z, max_len=128):
