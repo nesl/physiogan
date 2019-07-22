@@ -94,64 +94,6 @@ class ConvClassModel(tf.keras.Model):
         return out
 
 
-class CGARNNModel(tf.keras.Model):
-    """ Conditional- Generative Adeversarial RNN  model """
-
-    def __init__(self, num_feats, num_labels, z_dim=32, num_units=64):
-        super(CGARNNModel, self).__init__()
-        self.num_feats = num_feats
-        self.num_labels = num_labels
-        self.z_dim = z_dim
-        self.num_units = num_units
-        self.num_layers = 3
-        self.fc = layers.Dense(32)
-        self.emb = layers.Embedding(self.num_labels, 32)
-        self.gru = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-        self.gru2 = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-        self.gru3 = layers.CuDNNGRU(
-            self.num_units, return_state=True, return_sequences=True)
-
-        self.fc_last = layers.Dense(self.num_feats)
-        self.fc_z2h = layers.Dense(self.num_layers*self.num_units)
-
-        self.start_token = tf.zeros(shape=(1, 1, self.num_feats))
-
-    def __call__(self, x, y, hidden):
-        batch_size, time_len, feats = x.shape
-        h1 = self.fc(x)
-        h2 = self.emb(y)
-        h2 = tf.tile(tf.expand_dims(h2, 1), [1, time_len, 1])
-        h = tf.concat([h1, h2], axis=-1)
-        outputs, last_state1 = self.gru(h, hidden[0])
-        outputs, last_state2 = self.gru2(outputs, hidden[1])
-        outputs, last_state3 = self.gru3(outputs, hidden[2])
-        preds = self.fc_last(outputs)
-        new_hidden = tf.stack([last_state1, last_state2, last_state3])
-        return preds, new_hidden
-
-    def noise2hidden(self, z):
-        batch_size = z.shape[0]
-        out = self.fc_z2h(z)
-        out = tf.reshape(out, shape=(self.num_layers, batch_size, -1))
-        out = tf.math.tanh(out)
-        return out
-
-    def sample(self, labels, z, max_len=128):
-        """ generates samples conditioned on the given label """
-        num_examples = labels.shape[0]
-        # TODO(malzantot): fix the init pred : probably add an START token
-        step_pred = tf.tile(self.start_token, [num_examples, 1, 1])
-        preds = []
-        last_state = self.noise2hidden(z)  # use z as last state
-        for _ in range(max_len):
-            step_pred, last_state = self(step_pred, labels, last_state)
-            preds.append(step_pred)
-        output = tf.concat(preds, axis=1)
-        return output
-
-
 class RNNEncoder(tf.keras.Model):
     def __init__(self, rnn_units=64, z_dim=64, bidirectional=True):
         super(RNNEncoder, self).__init__()
@@ -221,10 +163,6 @@ class RNNDecoder(tf.keras.Model):
         new_hidden = [last_state1, last_state2, last_state3]
         return output, new_hidden
 
-    def init_hidden(self, batch_size):
-        h = tf.random_normal(shape=(batch_size, self.rnn_units))
-        return h
-
 
 class RVAEModel(tf.keras.Model):
 
@@ -236,6 +174,7 @@ class RVAEModel(tf.keras.Model):
         self.num_feats = num_feats
         self.num_labels = num_labels
         self.z_context = z_context
+        # TODO(malzantot): add y as an output of the encoder.
         self.encoder = RNNEncoder(
             enc_rnn_units, z_dim=z_dim, bidirectional=bidir_encoder)
         self.decoder = RNNDecoder(dec_rnn_units, num_feats, num_labels)
@@ -288,10 +227,9 @@ class RVAEModel(tf.keras.Model):
         return output
 
     def noise2hidden(self, z):
-        return self.fc_hidden(z)
-
-    def init_hidden(self, batch_size):
-        return tf.random_normal(shape=(batch_size, self.dec_rnn_units))
+        out = self.fc_hidden(z)
+        out = tf.math.tanh(out)
+        return out
 
     def sample(self, labels, z=None, max_len=125):
         """ generates samples conditioned on the given label """
@@ -322,17 +260,34 @@ class CRGANModel(tf.keras.Model):
         self.num_labels = num_labels
         self.z_dim = z_dim
         self.num_units = num_units
+        self.z_context = z_context
         self.num_layers = 3
         self.fc_hidden = layers.Dense(3*self.num_units)
         self.fc_z = layers.Dense(6)
         self.decoder = RNNDecoder(
             self.num_units, self.num_feats, self.num_labels)
+        self.start_token = tf.zeros(shape=(1, 1, self.num_feats))
 
-    def __call__(self, labels, z=None, max_len=125):
+    def __call__(self, x, y, z=None):
+        """ uses teacher forcing to predict the next token in sequence """
+        batch_size, time_len, feat_dim = x.shape
+        # initialize the decoder state with the z vector
+        dec_init_state = tf.reshape(self.noise2hidden(z), [3, batch_size, -1])
+
+        dec_input = x
+        if self.z_context:
+            z_emb = self.fc_z(z)
+            z_with_time = tf.tile(tf.expand_dims(
+                z_emb, 1), [1, time_len, 1])
+            dec_input = tf.concat([z_with_time, dec_input], axis=2)
+        recon_output, _ = self.decoder(dec_input, dec_init_state, y)
+        return recon_output
+
+    def sample(self, labels, z=None, max_len=125):
         """ generates samples conditioned on the given label """
         num_examples = int(labels.shape[0])
         if z is None:
-            z = tf.random_normal(shape=(num_examples, self.decoder.rnn_units))
+            z = tf.random_normal(shape=(num_examples, self.z_dims))
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
         last_state = tf.reshape(self.noise2hidden(z), [3, num_examples, -1])
@@ -348,3 +303,8 @@ class CRGANModel(tf.keras.Model):
             preds.append(last_pred)
         output = tf.concat(preds, axis=1)
         return output
+
+    def noise2hidden(self, z):
+        out = self.fc_hidden(z)
+        out = tf.math.tanh(out)
+        return out

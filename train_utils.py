@@ -11,7 +11,7 @@ import tb_utils
 # Losses
 
 
-from models import CGARNNModel, RVAEModel
+from models import CRGANModel, RVAEModel
 
 # use k=600 for adl dataset
 
@@ -36,9 +36,8 @@ def mse_train_g_epoch(model, train_data, optim):
             (tf.tile(model.start_token, [batch_size, 1, 1]), batch_x[:, :-1, :]), axis=1)
         train_y = batch_x
         noise_z = tf.random.normal(shape=(batch_size, model.z_dim))
-        init_hidden = model.noise2hidden(noise_z)
         with tf.GradientTape() as gt:
-            batch_preds, _ = model(train_x, batch_y, init_hidden)
+            batch_preds = model(train_x, batch_y, noise_z)
             batch_loss = mse_loss(train_y, batch_preds)
             loss_metric.update_state(batch_loss)
         grads = gt.gradient(batch_loss, model.trainable_variables)
@@ -86,51 +85,6 @@ def adv_train_d_epoch(g_model, d_model, train_data, d_optim, max_len):
     return loss_metric.result(), d_accuracy_metric.result()
 
 
-def crnn_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
-    g_loss_metric = tf.keras.metrics.Mean()
-    d_accuracy_metric = tf.keras.metrics.Accuracy()
-    for batch_x, batch_y in train_data:
-        batch_size = int(batch_x.shape[0])
-        batch_size = int(batch_x.shape[0])
-        train_x = tf.concat(
-            (tf.tile(g_model.start_token, [batch_size, 1, 1]), batch_x[:, :-1, :]), axis=1)
-        train_y = batch_x
-        # sampling size of "fake" class, at least 1 or poroportional to the size of each other classe samples.
-        sampling_size = max(1, batch_size // (d_model.num_labels))
-
-        d_batch_loss, d_batch_preds, d_batch_targets = train_d_model_batch(
-            g_model, d_model, batch_x, batch_y, d_optim, max_len)
-        d_accuracy_metric.update_state(d_batch_targets, d_batch_preds)
-        with tf.GradientTape() as g_tape:
-
-            # Train generator
-            # Reconsturction error
-            batch_noise = tf.random_normal(shape=(batch_size, g_model.z_dim))
-            batch_hidden = g_model.noise2hidden(batch_noise)
-            batch_preds, _ = g_model(train_x, batch_y, batch_hidden)
-            recon_loss = mse_loss(train_y, batch_preds)
-
-            cond_labels = tf.random.uniform(
-                minval=0, maxval=g_model.num_labels, shape=(sampling_size,), dtype=tf.int32)
-            sampling_z = tf.random_normal(shape=(sampling_size, g_model.z_dim))
-            samples = g_model.sample(cond_labels, sampling_z,
-                                     max_len=max_len)
-            d_out_fake = d_model(samples[:, ::, :])
-            # g_loss
-            g_adv_loss = sparse_softmax_cross_entropy(
-                cond_labels, d_out_fake) / batch_size
-            g_recon_loss = recon_loss
-            g_batch_loss = g_adv_loss + 100 * g_recon_loss
-
-        g_loss_metric.update_state(g_batch_loss)
-        g_grads = g_tape.gradient(g_batch_loss, g_model.trainable_variables)
-        g_clipped_grads, _ = tf.clip_by_global_norm(g_grads, 1.0)
-        g_optim.apply_gradients(
-            zip(g_clipped_grads, g_model.trainable_variables))
-
-    return g_loss_metric.result(), d_accuracy_metric.result()
-
-
 # utility function to evalute conditional label of samples using auxiliary classifier
 def evaluate_samples(g_model, aux_model, max_len):
     accuracy_metric = tf.keras.metrics.Accuracy()
@@ -172,8 +126,8 @@ def train_rvae(model, train_data, optim):
     return epoch_recon_metric, epoch_kl_metric  # epoch_loss
 
 
-def rcgan_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
-    loss_metric = tf.keras.metrics.Mean()
+def crgan_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
+    g_loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
@@ -209,16 +163,16 @@ def rcgan_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_
             # g_loss
             g_adv_loss = sparse_softmax_cross_entropy(
                 cond_labels, d_out_fake) / batch_size
-        loss_metric.update_state(g_loss)
+        g_loss_metric.update_state(g_adv_loss)
         d_grads = d_tape.gradient(d_loss, d_model.trainable_variables)
         d_optim.apply_gradients(zip(d_grads, d_model.trainable_variables))
 
-        g_grads = g_tape.gradient(g_loss, g_model.trainable_variables)
+        g_grads = g_tape.gradient(g_adv_loss, g_model.trainable_variables)
         g_clipped_grads, _ = tf.clip_by_global_norm(g_grads, 1.0)
         g_optim.apply_gradients(
             zip(g_clipped_grads, g_model.trainable_variables))
 
-    return loss_metric.result(), d_accuracy_metric.result(), 0
+    return g_loss_metric.result(), d_accuracy_metric.result()
 
 
 def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len=128):
@@ -230,7 +184,6 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
         batch_size = int(batch_x.shape[0])
         train_x = batch_x[:, :-1, :]
         train_y = batch_x[:, 1:, :]
-        init_hidden = g_model.init_hidden(batch_size)
         with tf.GradientTape() as d_tape, tf.GradientTape() as g_tape:
             # Reconsturction error
             batch_preds, mu, log_var = g_model(train_x, batch_y)
@@ -303,7 +256,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
 
 
 def train_mse_epoch(model, train_data, optim):
-    if isinstance(model, CGARNNModel):
+    if isinstance(model, CRGANModel):
         return (*mse_train_g_epoch(model, train_data, optim), 0)
     elif isinstance(model, RVAEModel):
         return train_rvae(
@@ -311,8 +264,8 @@ def train_mse_epoch(model, train_data, optim):
 
 
 def train_adv_epoch(g_model, d_model, train_data, g_optim, d_optim,  epoch_idx, max_len):
-    if isinstance(g_model, CGARNNModel):
-        return (*crnn_adv_train_epoch(
+    if isinstance(g_model, CRGANModel):
+        return (*crgan_adv_train_epoch(
             g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len), 0)
     elif isinstance(g_model, RVAEModel):
         return rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_idx, max_len)

@@ -11,7 +11,7 @@ from tensorflow.keras import layers
 import datetime
 from data_utils import DataFactory
 import tb_utils
-from models import CGARNNModel, ClassModel, ConvDiscriminator, RVAEModel
+from models import CRGANModel, ClassModel, ConvDiscriminator, RVAEModel
 from train_utils import train_mse_epoch, train_adv_epoch, mse_train_g_epoch, adv_train_d_epoch,  evaluate_samples, gen_plot
 import matplotlib as mpl
 mpl.use('agg')
@@ -27,21 +27,20 @@ flags.DEFINE_integer('z_dim', 32, 'Size of latent space noise vector')
 flags.DEFINE_boolean('bidir_encoder', True, 'Use a bidirectional encoder')
 flags.DEFINE_boolean(
     'z_context', True, 'Use z as a context input to the decoder timesteps')
-flags.DEFINE_integer(
-    "mle_epochs", 0, "Number of epochs to train using MLE only")
+flags.DEFINE_boolean(
+    "use_mle", True, "train using MLE only")
 flags.DEFINE_integer('disc_pre_train_epochs', 5,
                      'Number of epochs to pre-train the discriminator')
 flags.DEFINE_integer('num_units', 64, 'Number of RNN units')
 flags.DEFINE_string('dataset', 'dummy', "dataset")
 flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
-flags.DEFINE_string('model_name', 'crnn', 'Model name')
 flags.DEFINE_string('restore', None, 'checkpoint directory')
 flags.DEFINE_string('aux_restore', None,
                     'checkpoint directory for discriminator')
 flags.DEFINE_boolean('sample', False, 'Generate Samples')
 flags.DEFINE_float('sampling_scale', 1.0,
                    'Scale of sampling size relative to the training size')
-flags.DEFINE_string('model_type', 'crnn', 'MOdel name')
+flags.DEFINE_string('model_type', 'rvae', 'MOdel name')
 flags.DEFINE_boolean('filter_samples', False,
                      'Use discriminator to filter samples')
 
@@ -53,11 +52,11 @@ if __name__ == '__main__':
     train_data = train_data.batch(FLAGS.batch_size)
     test_data = test_data.batch(FLAGS.batch_size)
 
-    if FLAGS.model_type == 'crnn':
-        g_model = CGARNNModel(num_feats=metadata.num_feats,
-                              num_labels=metadata.num_labels,
-                              z_dim=FLAGS.z_dim,
-                              num_units=FLAGS.num_units)
+    if FLAGS.model_type == 'crgan':
+        g_model = CRGANModel(num_feats=metadata.num_feats,
+                             num_labels=metadata.num_labels,
+                             z_dim=FLAGS.z_dim,
+                             num_units=FLAGS.num_units)
     elif FLAGS.model_type == 'rvae':
         g_model = RVAEModel(num_feats=metadata.num_feats,
                             z_dim=FLAGS.z_dim,
@@ -82,7 +81,9 @@ if __name__ == '__main__':
     d_model = ConvDiscriminator(
         num_feats=metadata.num_feats, num_labels=metadata.num_labels)
     d_optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
-    model_tag = '{}_{}'.format(FLAGS.dataset, FLAGS.model_name)
+    train_method = 'mle' if FLAGS.use_mle else 'adv'
+    model_tag = '{}_{}_{}'.format(
+        FLAGS.dataset, FLAGS.model_type, train_method)
     model_name = '{}/{}'.format(
         model_tag, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
@@ -157,12 +158,12 @@ if __name__ == '__main__':
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
 
         for epoch in range(1, FLAGS.num_epochs+1):
-            if epoch <= FLAGS.mle_epochs:
+            if FLAGS.use_mle:
                 epoch_loss, kl_loss = train_mse_epoch(
                     g_model, train_data, g_optim)
                 print('{} - {}'.format(epoch, epoch_loss))
             else:
-                if epoch == (FLAGS.mle_epochs+1):
+                if epoch == 1:
                     print('*** Pre-Training Discriminator ***')
                     for ii in range(FLAGS.disc_pre_train_epochs):
                         _, d_acc = adv_train_d_epoch(

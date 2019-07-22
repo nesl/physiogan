@@ -11,11 +11,11 @@ class DummyDataset:
 
     num_feats = 1
     num_labels = len(classes)
-    max_len = 128
+    max_len = 32
 
     @classmethod
     def generate_sin1(cls, length):
-        freq = 50
+        freq = 10
         x_start = np.random.uniform(0, 100)
         x_range = np.linspace(x_start, x_start+length, num=length)
         signal = np.sin(2*np.pi*x_range/freq)
@@ -23,7 +23,7 @@ class DummyDataset:
 
     @classmethod
     def generate_sin2(cls, length):
-        freq = 20
+        freq = 6
         x_start = np.random.uniform(0, 100)
         x_range = np.linspace(x_start, x_start+length, num=length)
         signal = np.sin(2*np.pi*x_range/freq)
@@ -31,7 +31,7 @@ class DummyDataset:
 
     @classmethod
     def generate_tri(cls, length):
-        freq = 50
+        freq = 10
         x_start = np.random.uniform(0, 100)
         x_range = np.linspace(x_start, x_start+length, num=length)
         signal = (x_range % freq) / freq
@@ -51,7 +51,7 @@ class DummyDataset:
         signal = signal.reshape((-1, 1))
         return signal.astype(np.float32)
 
-    def __init__(self, dset_root=None, is_train=True):
+    def __init__(self, dset_root=None, is_train=True, mini=False):
         """
         dset_root :  classesummy parameter to maintain consistency with other datasets.
 
@@ -64,8 +64,10 @@ class DummyDataset:
         all_labels = []
         for c_id, c_name in enumerate(self.classes):
             for _ in range(300):
-                all_data.append(self.generate_example(c_name))
+                all_data.append(self.generate_example(c_name, self.max_len))
                 all_labels.append(c_id)
+
+        all_labels = np.array(all_labels).astype(np.int32)
 
         if self.is_train:
             self.data, _, self.labels, _ = train_test_split(
