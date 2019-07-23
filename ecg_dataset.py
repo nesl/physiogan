@@ -19,7 +19,7 @@ class ECGDataset:
     num_feats = 1
     max_len = 40
 
-    def __init__(self, ds_root, is_train=True, mini=False):
+    def __init__(self, ds_root, is_train=True, mini=True):
         self.root = ds_root
         self.is_train = is_train
         self.mini = mini
@@ -27,6 +27,13 @@ class ECGDataset:
         if self.mini:
             self.classes = ['1 NSR', '4 AFIB']
             self.num_labels = len(self.classes)
+            self.max_len = 40
+            seq_end = 500
+        else:
+            self.classes = ['1 NSR', '4 AFIB']
+            self.num_labels = len(self.classes)
+            self.max_len = 120
+            seq_end = 1300
         classes_found = [x for x in os.listdir(self.root)
                          if os.path.isdir(os.path.join(self.root, x))]
         classes_found = [x for x in self.classes if x in classes_found]
@@ -53,7 +60,7 @@ class ECGDataset:
                 data = data[:, np.newaxis]
                 data = (data - np.mean(data)) / (np.std(data)*10)
                 all_data.append(data)
-        all_data = [subsample(x[100:500], 10) for x in all_data]
+        all_data = [subsample(x[100:seq_end], 10) for x in all_data]
         all_data = np.stack(all_data).astype(np.float32)
         all_labels = np.stack(all_labels).astype(np.int32)
         train_data, test_data, train_labels, test_labels = train_test_split(
@@ -73,8 +80,8 @@ class ECGDataset:
 
 
 if __name__ == '__main__':
-    train_dataset = ECGDataset('dataset/ecg_data', is_train=True, mini=True)
-    test_dataset = ECGDataset('dataset/ecg_data', is_train=False, mini=True)
+    train_dataset = ECGDataset('dataset/ecg_data', is_train=True, mini=False)
+    test_dataset = ECGDataset('dataset/ecg_data', is_train=False, mini=False)
     print(train_dataset.to_dataset().batch(10))
 
     train_set = train_dataset.to_dataset().shuffle(1000).batch(10)

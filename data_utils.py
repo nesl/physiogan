@@ -29,7 +29,7 @@ class DataFactory:
         elif dset_name == 'adl_full':
             dset_root = 'dataset/adl'
             dset_class = ADLDataset
-            mini = False 
+            mini = False
         elif dset_name == 'cinc':
             dset_root = 'dataset/cinc'
             dset_class = CINCDataset
@@ -46,10 +46,14 @@ class DataFactory:
             dset_root = 'dataset/ecg_data'
             dset_class = ECGDataset
             mini = True
+        elif dset_name == 'ecg_long':
+            dset_root = 'dataset/ecg_data'
+            dset_class = ECGDataset
+            mini = False
         elif dset_name == 'ecg_full':
             dset_root = 'dataset/ecg_data'
             dset_class = ECGDataset
-            mini = False          
+            mini = False
         elif dset_name == 'dummy':
             dset_root = None
             dset_class = DummyDataset

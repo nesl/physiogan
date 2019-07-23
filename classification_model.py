@@ -9,7 +9,7 @@ from tensorflow.keras import layers
 from data_utils import DataFactory
 from syn_dataset import SynDataset
 from tb_utils import plot_confusion_matrix, fig_to_image_tensor
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 import matplotlib as mpl
 mpl.use('agg')
 
@@ -70,7 +70,12 @@ def evaluate(model, dataset):
     all_true = np.concatenate(all_true)
     all_preds = np.concatenate(all_preds)
     conf_mat = confusion_matrix(all_true, all_preds)
-    return accuracy_metric.result(), conf_mat
+    f1_val = f1_score(all_true, all_preds, average='macro')
+    if model.num_labels == 2:
+        auc_val = roc_auc_score(all_true, all_preds)
+    else:
+        auc_val = 0
+    return accuracy_metric.result(), conf_mat, f1_val, auc_val
 
 
 if __name__ == '__main__':
@@ -129,8 +134,10 @@ if __name__ == '__main__':
                 FLAGS.evaluate_syn)
             assert metadata.num_feats == test_data.num_feats and metadata.num_labels == test_data.num_labels, 'Datasets mismatch'
             test_data = test_data.to_dataset().batch(FLAGS.batch_size)
-        test_accuracy, conf_mat = evaluate(model, test_data)
+        test_accuracy, conf_mat, f1_val, auc_val = evaluate(model, test_data)
         print('Test accuracy = {:.2f}'.format(test_accuracy))
+        print('F1 score = {} \n'.format(f1_val))
+        print('AUC score = {} \n'.format(auc_val))
         print('Confusion matrix = \n {}'.format(conf_mat))
         cm_fig = plot_confusion_matrix(
             conf_mat, metadata.classes, normalize=True)
@@ -142,9 +149,10 @@ if __name__ == '__main__':
     with file_writer.as_default(), tf.contrib.summary.always_record_summaries():
         for epoch in range(1, FLAGS.num_epochs+1):
             epoch_loss, epoch_accuracy = train_epoch(model, train_data)
-            test_accuracy, conf_mat = evaluate(model, test_data)
-            print('{} - {} - {} - {}'.format(epoch,
-                                             epoch_loss, epoch_accuracy, test_accuracy))
+            test_accuracy, conf_mat, f1_val, auc_val = evaluate(
+                model, test_data)
+            print('{} - {} - {} - {} - {} - {}'.format(epoch,
+                                                       epoch_loss, epoch_accuracy, test_accuracy, f1_val, auc_val))
             tf.contrib.summary.scalar('training loss', epoch_loss, step=epoch)
             tf.contrib.summary.scalar(
                 'train accuracy', epoch_accuracy, step=epoch)
