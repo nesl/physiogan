@@ -9,6 +9,7 @@ from cinc_dataset import CINCDataset
 from ecg2lead_dataset import ECG2LeadDataset
 from ecg200_dataset import ECG200Dataset
 from ecg_dataset import ECGDataset
+from icu_dataset import ICUDataset
 Metadata = namedtuple(
     'Point', ['num_feats', 'num_labels', 'classes', 'max_len', 'num_examples'], verbose=False)
 
@@ -53,6 +54,10 @@ class DataFactory:
         elif dset_name == 'ecg_full':
             dset_root = 'dataset/ecg_data'
             dset_class = ECGDataset
+            mini = False
+        elif dset_name == 'icu':
+            dset_root = 'dataset/icu'
+            dset_class = ICUDataset
             mini = False
         elif dset_name == 'dummy':
             dset_root = None
