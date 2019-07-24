@@ -254,13 +254,14 @@ class RVAEModel(tf.keras.Model):
 
 
 class CRGANModel(tf.keras.Model):
-    def __init__(self, num_feats, num_labels, z_dim, num_units, z_context=True):
+    def __init__(self, num_feats, num_labels, z_dim, num_units, z_context=True, autoregressive=True):
         super(CRGANModel, self).__init__()
         self.num_feats = num_feats
         self.num_labels = num_labels
         self.z_dim = z_dim
         self.num_units = num_units
         self.z_context = z_context
+        self.autoregressive = autoregressive
         self.num_layers = 3
         self.fc_hidden = layers.Dense(3*self.num_units)
         self.fc_z = layers.Dense(6)
@@ -275,6 +276,7 @@ class CRGANModel(tf.keras.Model):
         dec_init_state = tf.reshape(self.noise2hidden(z), [3, batch_size, -1])
 
         dec_input = x
+
         if self.z_context:
             z_emb = self.fc_z(z)
             z_with_time = tf.tile(tf.expand_dims(
@@ -295,8 +297,12 @@ class CRGANModel(tf.keras.Model):
         z_with_time = tf.expand_dims(z_emb, axis=1)
         for _ in range(max_len):
             if self.z_context:
-                step_input = tf.concat([z_with_time, last_pred], axis=2)
+                if self.autoregressive:
+                    step_input = tf.concat([z_with_time, last_pred], axis=2)
+                else:
+                    step_input = z_with_time
             else:
+                assert self.autoregressive, 'Must be autregressive without using z as input'
                 step_input = last_pred
             last_pred, last_state = self.decoder(
                 step_input, last_state, labels)

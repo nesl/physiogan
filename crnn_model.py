@@ -57,6 +57,12 @@ if __name__ == '__main__':
                              num_labels=metadata.num_labels,
                              z_dim=FLAGS.z_dim,
                              num_units=FLAGS.num_units)
+    elif FLAGS.model_type == 'rgan':
+        g_model = CRGANModel(num_feats=metadata.num_feats,
+                             num_labels=metadata.num_labels,
+                             z_dim=FLAGS.z_dim,
+                             num_units=FLAGS.num_units,
+                             autoregressive=False)
     elif FLAGS.model_type == 'rvae':
         g_model = RVAEModel(num_feats=metadata.num_feats,
                             z_dim=FLAGS.z_dim,
