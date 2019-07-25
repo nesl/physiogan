@@ -11,7 +11,7 @@ from ecg200_dataset import ECG200Dataset
 from ecg_dataset import ECGDataset
 from icu_dataset import ICUDataset
 Metadata = namedtuple(
-    'Point', ['num_feats', 'num_labels', 'classes', 'max_len', 'num_examples'], verbose=False)
+    'Point', ['num_feats', 'num_labels', 'classes', 'class_names', 'max_len', 'num_examples'], verbose=False)
 
 
 class DataFactory:
@@ -70,5 +70,5 @@ class DataFactory:
         test_data = dset_class(dset_root, is_train=False, mini=mini)
 
         dset_meta = Metadata(train_data.num_feats,
-                             train_data.num_labels, train_data.classes, train_data.max_len, train_data.labels.shape[0])
+                             train_data.num_labels, train_data.classes, train_data.class_names, train_data.max_len, train_data.labels.shape[0])
         return train_data.to_dataset(), test_data.to_dataset(), dset_meta

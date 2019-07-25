@@ -1,3 +1,5 @@
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import os
 import random
@@ -7,14 +9,13 @@ from sklearn.model_selection import train_test_split
 
 from data_preprocs import subsample
 import numpy as np
-import matplotlib
-matplotlib.use('agg')
 
 tf.enable_eager_execution()
 
 
 class ECGDataset:
     classes = ['1 NSR', '4 AFIB', '7 PVC',  '14 LBBBB',  '15 RBBBB']
+    class_names = ['Normal', 'AFib', 'PVC', 'LBBBB', 'RBBBB'] # Friendly names for display
     num_labels = len(classes)
     num_feats = 1
     max_len = 40
@@ -26,6 +27,7 @@ class ECGDataset:
 
         if self.mini:
             self.classes = ['1 NSR', '4 AFIB']
+            self.class_names = ['Normal', 'AFib']
             self.num_labels = len(self.classes)
             self.max_len = 40
             seq_end = 500

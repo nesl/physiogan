@@ -12,6 +12,9 @@ class HARDataset:
                "WALKING_DOWNSTAIRS",
                "SITTING", "STANDING", "LAYING"]
 
+    class_names = ['Walking', 'Walking Upstairs', 'Walking Downstairs',
+                   'Sitting', 'Standing', 'Laying']
+
     num_labels = 6
     num_feats = 6
     max_len = 32
