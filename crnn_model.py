@@ -152,6 +152,14 @@ if __name__ == '__main__':
             selected_samples = samples
         samples_out_dir = 'samples/{}'.format(FLAGS.restore)
 
+        if FLAGS.dataset == 'ecg_long':
+            samples_out_dir = '{}_{}'.format(
+                samples_out_dir, 'long')
+
+        if FLAGS.sampling_scale != 1:
+            samples_out_dir = '{}_{}'.format(
+                samples_out_dir, FLAGS.sampling_scale)
+
         if not os.path.exists(samples_out_dir):
             os.makedirs(samples_out_dir)
         np.save('{}/samples_x.npy'.format(samples_out_dir), selected_samples)
