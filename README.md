@@ -1,21 +1,21 @@
-##Synthetic Bio-sensor data generation
+## Synthetic Sensor Data Generation
 
 
 
-Install requirements
+### Install requirements
 
 ```
 pip install -r requirements.txt
 ```
 
-Download datasets
+### Download datasets
 
 ```
-bash download_adl_dataset.sh
 bash download_har_dataset.sh
+bash download_ecg_dataset.sh
 ```
 
-Train classifiers
+### Train classifiers
 
 
 ```
@@ -27,10 +27,9 @@ where xxx is one of [har, adl]
 
 Note the dir of the classification model (from tensorboard) because it will be used later as an auxiliary model to evaluate the synthetic samples.
 
-```
 
 
-##Train the generative model:
+### Train the generative model:
 
 Use the following command to train generative model:
 
@@ -40,7 +39,7 @@ Use the following command to train generative model:
    --num_units=128 --z_dim=16  --bidir_encoder=True --z_context=True
  ```
 
- ##Produce Synthetic samples
+ ### Produce Synthetic samples
 
  Use same command as the training command above, abut add extra two flags `--sample --restore=xxx`
 
@@ -53,7 +52,7 @@ Use the following command to train generative model:
 
 Make a note of the printed message that tells you where are the samples going to be saved.
 
-###Train classification model on Synthetic samples
+### Train classification model on Synthetic samples
 
 ```
 python classification_model.py --dataset=xxx --num_epochs=200 --train_syn=SAMPLES_DIR
