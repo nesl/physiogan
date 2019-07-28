@@ -8,7 +8,7 @@ import tensorflow as tf
 class DummyDataset:
 
     classes = ['sin-1', 'tri', 'sin-2']
-
+    class_names = ['sin-1', 'tri', 'sin-2']
     num_feats = 1
     num_labels = len(classes)
     max_len = 32
