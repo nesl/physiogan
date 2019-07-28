@@ -21,7 +21,7 @@ tf.enable_eager_execution()
 
 
 flags = tf.app.flags
-flags.DEFINE_integer('batch_size', 32, 'batch size')
+flags.DEFINE_integer('batch_size', 256, 'batch size')
 flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
 flags.DEFINE_integer('z_dim', 16, 'Size of latent space noise vector')
 flags.DEFINE_boolean('bidir_encoder', True, 'Use a bidirectional encoder')
@@ -105,9 +105,8 @@ if __name__ == '__main__':
     d_model = ConvDiscriminator(
         num_feats=metadata.num_feats, num_labels=metadata.num_labels)
     d_optim = tf.train.AdamOptimizer(learning_rate=FLAGS.learning_rate)
-    train_method = 'mle' if FLAGS.use_mle else 'adv'
-    model_tag = '{}_{}_{}'.format(
-        FLAGS.dataset, FLAGS.model_type, train_method)
+    model_tag = '{}_{}'.format(
+        FLAGS.dataset,  FLAGS.model_type)
     model_name = '{}/{}'.format(
         model_tag, datetime.datetime.now().strftime('%m_%d_%H_%M'))
     log_dir = './logs/{}'.format(model_name)
