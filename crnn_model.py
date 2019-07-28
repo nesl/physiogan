@@ -22,7 +22,7 @@ tf.enable_eager_execution()
 
 flags = tf.app.flags
 flags.DEFINE_integer('batch_size', 256, 'batch size')
-flags.DEFINE_integer('num_epochs', 50, 'Number of epochs')
+flags.DEFINE_integer('num_epochs', 5000, 'Number of epochs')
 flags.DEFINE_integer('z_dim', 16, 'Size of latent space noise vector')
 flags.DEFINE_boolean('bidir_encoder', True, 'Use a bidirectional encoder')
 flags.DEFINE_boolean(
