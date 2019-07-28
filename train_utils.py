@@ -179,7 +179,7 @@ def rvae_adv_train_epoch(g_model, d_model, train_data, g_optim, d_optim, epoch_i
     loss_metric = tf.keras.metrics.Mean()
     d_accuracy_metric = tf.keras.metrics.Accuracy()
     kl_metric = tf.keras.metrics.Mean()
-    ratio = max(inverse_sigmoid(epoch_idx), 0, 10)
+    ratio = max(inverse_sigmoid(epoch_idx), 0.10)
     for batch_x, batch_y in train_data:
         batch_size = int(batch_x.shape[0])
         train_x = batch_x[:, :-1, :]
