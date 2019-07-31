@@ -1,17 +1,17 @@
+from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
+from tb_utils import plot_confusion_matrix, fig_to_image_tensor
+from syn_dataset import SynDataset
+from data_utils import DataFactory
+from tensorflow.keras import layers
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from models import ClassModel, ConvClassModel
+import os
+import sys
+import datetime
+import numpy as np
 import matplotlib as mpl
 mpl.use('agg')
-import numpy as np
-import datetime
-import sys
-import os
-from models import ClassModel, ConvClassModel
-import matplotlib.pyplot as plt
-import tensorflow as tf
-from tensorflow.keras import layers
-from data_utils import DataFactory
-from syn_dataset import SynDataset
-from tb_utils import plot_confusion_matrix, fig_to_image_tensor
-from sklearn.metrics import confusion_matrix, f1_score, roc_auc_score
 
 
 tf.enable_eager_execution()
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         print('AUC score = {} \n'.format(auc_val))
         print('Confusion matrix = \n {}'.format(conf_mat))
         cm_fig = plot_confusion_matrix(
-            conf_mat, metadata.classes, normalize=True)
+            conf_mat, metadata.class_names, normalize=True)
         plt.show()
         sys.exit(0)
 

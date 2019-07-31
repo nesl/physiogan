@@ -36,7 +36,7 @@ def plot_confusion_matrix(conf_mat, classes,
 
     fig, ax = plt.subplots()
     im = ax.imshow(conf_mat, interpolation='nearest', cmap=cmap)
-    ax.figure.colorbar(im, ax=ax)
+    #ax.figure.colorbar(im, ax=ax)
     # We want to show all ticks...
     ax.set(xticks=np.arange(conf_mat.shape[1]),
            yticks=np.arange(conf_mat.shape[0]),
