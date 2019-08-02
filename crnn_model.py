@@ -56,7 +56,7 @@ if __name__ == '__main__':
                              num_labels=metadata.num_labels,
                              z_dim=FLAGS.z_dim,
                              num_units=FLAGS.num_units,
-                             z_context=False)
+                             z_context=True)
         use_mle = True
     elif FLAGS.model_type == 'rganar':
         # RGAN with autoregressive decoder
