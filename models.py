@@ -209,7 +209,7 @@ class RVAEModel(tf.keras.Model):
         z_with_time = tf.expand_dims(z_emb, axis=1)
         preds = []
         for step in range(time_len):
-            if step == 0 or mask[0, step, 0] == 0:
+            if step == 0 or mask[0, step-1, 0] == 0:
                 step_input = last_pred
             else:
                 step_input = x[:, step-1:step, :]
