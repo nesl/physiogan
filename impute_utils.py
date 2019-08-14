@@ -53,29 +53,25 @@ def plot_results(x, x_complete, masks, results, mask_type, num_examples =3, draw
         test_orig = x_complete[test_idx]
     
         drop_range = np.where(test_mask[:,0] != 1)
-        axes[0][idx].plot(test_orig[:,0])
+        axes[0][idx].plot(test_orig[:,:])
         axes[0][idx].set_title('Original signal', fontsize=22)
         axes[0][idx].set_ylim(-0.25, 0.35)
         if mask_type == 'segment':
             axes[0][idx].axvspan(np.min(drop_range), np.max(drop_range), color='green', alpha=draw_alpha)
             axes[1][idx].axvspan(np.min(drop_range), np.max(drop_range), color='black', alpha=draw_alpha)
-            axes[2][idx].axvspan(np.min(drop_range), np.max(drop_range), color='red', alpha=draw_alpha)
-            axes[3][idx].axvspan(np.min(drop_range), np.max(drop_range), color='red', alpha=draw_alpha)
         else:
             for j in range(test_mask.shape[0]):
                 if np.isnan(test_mask[j,0]):
                     axes[0][idx].axvspan(j,j+1, color='green', alpha=draw_alpha)
                     axes[1][idx].axvspan(j,j+1, color='black', alpha=draw_alpha)
-                    axes[2][idx].axvspan(j,j+1, color='red', alpha=draw_alpha)
-                    axes[3][idx].axvspan(j,j+1, color='red', alpha=draw_alpha)
 
         axes[1][idx].set_title('Input Signal',fontsize=22)
-        axes[1][idx].plot(test_x_masked[:,0])
+        axes[1][idx].plot(test_x_masked[:,:])
         axes[1][idx].set_ylim(-0.25, 0.35)
 
         
         for i,m in enumerate(methods):
-            axes[i+2][idx].plot(results[m][test_idx,:,0])
+            axes[i+2][idx].plot(results[m][test_idx,:,:])
             axes[i+2][idx].set_title('{} Imputation'.format(m), fontsize=22)
             axes[i+2][idx].set_ylim(-0.25, 0.35)
     
