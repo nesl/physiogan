@@ -209,7 +209,7 @@ class RVAEModel(tf.keras.Model):
         z_with_time = tf.expand_dims(z_emb, axis=1)
         preds = []
         for step in range(time_len):
-            if step == 0 or mask[0, step-1, 0] == 0:
+            if step == 0 or mask[step-1, 0] == 0:
                 step_input = last_pred
             else:
                 step_input = x[:, step-1:step, :]
@@ -218,7 +218,7 @@ class RVAEModel(tf.keras.Model):
 
             last_pred, last_state = self.decoder(
                 step_input, last_state, y)
-            if mask[0, step, 0] == 0:
+            if mask[step, 0] == 0:
                 preds.append(last_pred)
             else:
                 preds.append(x[:, step:step+1, :])
@@ -289,7 +289,7 @@ class CRGANModel(tf.keras.Model):
         """ generates samples conditioned on the given label """
         num_examples = int(labels.shape[0])
         if z is None:
-            z = tf.random_normal(shape=(num_examples, self.z_dims))
+            z = tf.random_normal(shape=(num_examples, self.z_dim))
         last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
         preds = []
         last_state = tf.reshape(self.noise2hidden(z), [3, num_examples, -1])
@@ -307,6 +307,39 @@ class CRGANModel(tf.keras.Model):
             last_pred, last_state = self.decoder(
                 step_input, last_state, labels)
             preds.append(last_pred)
+        output = tf.concat(preds, axis=1)
+        return output
+
+    def impute(self, x, labels, mask, z=None):
+        num_examples, max_len, num_feats = x.shape
+        if z is None:
+            z = tf.random_normal(shape=(num_examples, self.z_dim))
+        last_pred = tf.zeros(shape=(num_examples, 1, self.num_feats))
+        preds = []
+        last_state = tf.reshape(self.noise2hidden(z), [3, num_examples, -1])
+        z_emb = self.fc_z(z)
+        z_with_time = tf.expand_dims(z_emb, axis=1)
+        for step in range(max_len):
+            if step == 0 or mask[step-1, 0] == 0:
+                step_input = last_pred
+            else:
+                step_input = x[:, step-1:step, :]
+
+            if self.z_context:
+                if self.autoregressive:
+                    step_input = tf.concat([z_with_time, step_input], axis=2)
+                else:
+                    step_input = z_with_time
+            else:
+                assert self.autoregressive, 'Must be autregressive without using z as input'
+                step_input = last_pred
+
+            last_pred, last_state = self.decoder(
+                step_input, last_state, labels)
+            if mask[step, 0] == 0:
+                preds.append(last_pred)
+            else:
+                preds.append(x[:, step:step+1, :])
         output = tf.concat(preds, axis=1)
         return output
 
